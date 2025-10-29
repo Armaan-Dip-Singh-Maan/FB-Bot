@@ -133,6 +133,89 @@ class VectorDB {
   }
 
   /**
+   * Remove documents by source
+   * @param {string} source - Source to filter by (e.g., 'website', 'pdf')
+   */
+  async removeDocumentsBySource(source) {
+    const initialCount = this.documents.length;
+    this.documents = this.documents.filter(doc => doc.metadata.source !== source);
+    const removedCount = initialCount - this.documents.length;
+    
+    if (removedCount > 0) {
+      await this.saveToDisk();
+      console.log(`Removed ${removedCount} documents from source: ${source}`);
+    }
+    
+    return removedCount;
+  }
+
+  /**
+   * Update documents based on filter criteria
+   * @param {Function} filter - Function to filter documents to update
+   * @param {Array} newDocs - New documents to add
+   */
+  async updateDocuments(filter, newDocs) {
+    // Remove old documents matching the filter
+    const initialCount = this.documents.length;
+    this.documents = this.documents.filter(doc => !filter(doc));
+    const removedCount = initialCount - this.documents.length;
+    
+    // Add new documents
+    this.documents.push(...newDocs);
+    
+    await this.saveToDisk();
+    console.log(`Updated documents: removed ${removedCount}, added ${newDocs.length}`);
+    
+    return { removed: removedCount, added: newDocs.length };
+  }
+
+  /**
+   * Get documents by source
+   * @param {string} source - Source to filter by
+   * @returns {Array} Documents from the specified source
+   */
+  getDocumentsBySource(source) {
+    return this.documents.filter(doc => doc.metadata.source === source);
+  }
+
+  /**
+   * Get content sources statistics
+   * @returns {Object} Statistics about content sources
+   */
+  getContentSourcesStats() {
+    const stats = {};
+    
+    this.documents.forEach(doc => {
+      const source = doc.metadata.source || 'unknown';
+      if (!stats[source]) {
+        stats[source] = {
+          count: 0,
+          urls: new Set(),
+          files: new Set()
+        };
+      }
+      
+      stats[source].count++;
+      
+      if (doc.metadata.url) {
+        stats[source].urls.add(doc.metadata.url);
+      }
+      
+      if (doc.metadata.fileName) {
+        stats[source].files.add(doc.metadata.fileName);
+      }
+    });
+    
+    // Convert Sets to Arrays for JSON serialization
+    Object.keys(stats).forEach(source => {
+      stats[source].urls = Array.from(stats[source].urls);
+      stats[source].files = Array.from(stats[source].files);
+    });
+    
+    return stats;
+  }
+
+  /**
    * Get all documents (for debugging)
    * @returns {Array} All documents
    */
