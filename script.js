@@ -22,6 +22,11 @@ let conversationHistory = [];
 let isProcessing = false;
 let messageCount = 0;
 let calendlySuggested = false;
+let qualificationScore = 0;
+let qualificationStatus = 'browsing';
+let sessionId = null;
+let userEmail = null;
+let disclaimerAccepted = false;
 
 // ============================================
 // DOM ELEMENTS
@@ -37,6 +42,16 @@ const whatsappWidget = document.getElementById('whatsapp-widget');
 const whatsappWidgetSide = document.getElementById('whatsapp-widget-side');
 const calendlyOverlay = document.getElementById('calendly-overlay');
 const closeCalendlyBtn = document.getElementById('close-calendly');
+const disclaimerBanner = document.getElementById('disclaimer-banner');
+const closeDisclaimerBtn = document.getElementById('close-disclaimer');
+const feedbackBtn = document.getElementById('feedback-btn');
+const emailModal = document.getElementById('email-modal');
+const closeEmailModalBtn = document.getElementById('close-email-modal');
+const skipEmailBtn = document.getElementById('skip-email');
+const submitEmailBtn = document.getElementById('submit-email');
+const userEmailInput = document.getElementById('user-email-input');
+const thankyouModal = document.getElementById('thankyou-modal');
+const closeThankyouBtn = document.getElementById('close-thankyou');
 
 
 // ============================================
@@ -50,6 +65,37 @@ if (whatsappWidgetSide) {
     whatsappWidgetSide.addEventListener('click', handleWhatsAppClick);
 }
 closeCalendlyBtn.addEventListener('click', closeCalendlyWidget);
+if (closeDisclaimerBtn) {
+    closeDisclaimerBtn.addEventListener('click', closeDisclaimer);
+}
+if (feedbackBtn) {
+    feedbackBtn.addEventListener('click', showEmailModal);
+}
+if (closeEmailModalBtn) {
+    closeEmailModalBtn.addEventListener('click', closeEmailModal);
+}
+if (skipEmailBtn) {
+    skipEmailBtn.addEventListener('click', skipEmail);
+}
+if (submitEmailBtn) {
+    submitEmailBtn.addEventListener('click', submitEmail);
+}
+if (closeThankyouBtn) {
+    closeThankyouBtn.addEventListener('click', () => {
+        if (thankyouModal) {
+            thankyouModal.classList.add('hidden');
+        }
+        closeChat();
+    });
+}
+// Allow Enter key to submit email
+if (userEmailInput) {
+    userEmailInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            submitEmail();
+        }
+    });
+}
 
 userInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
@@ -71,15 +117,146 @@ if (calendlyOverlay) {
 // MAIN FUNCTIONS
 // ============================================
 
+// Generate unique session ID
+function generateSessionId() {
+    return 'session_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+}
+
+// Initialize session
+async function initializeSession() {
+    if (!sessionId) {
+        sessionId = generateSessionId();
+        try {
+            await fetch(`${RAG_BACKEND_URL}/api/metrics/track-visitor`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId, email: userEmail })
+            });
+        } catch (error) {
+            console.error('Error tracking visitor:', error);
+        }
+    }
+}
+
 function openChat() {
     chatbotContainer.classList.remove('hidden');
     chatbotToggle.classList.add('hidden');
+    
+    // Always show disclaimer banner (removed sessionStorage check - shows every time)
+    disclaimerAccepted = false;
+    if (disclaimerBanner) {
+        disclaimerBanner.classList.remove('hidden');
+    }
+    
+    // Initialize session tracking
+    initializeSession();
+    
     userInput.focus();
 }
 
+function closeDisclaimer() {
+    disclaimerAccepted = true;
+    // No persistence - disclaimer will show again on next page refresh
+    if (disclaimerBanner) {
+        disclaimerBanner.classList.add('hidden');
+    }
+}
+
 function closeChat() {
+    // Track drop-off before closing
+    if (sessionId) {
+        fetch(`${RAG_BACKEND_URL}/api/metrics/track-dropoff`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, messageCount })
+        }).catch(err => console.error('Error tracking drop-off:', err));
+    }
+    
     chatbotContainer.classList.add('hidden');
     chatbotToggle.classList.remove('hidden');
+}
+
+function showEmailModal() {
+    if (emailModal) {
+        emailModal.classList.remove('hidden');
+    }
+}
+
+function closeEmailModal() {
+    if (emailModal) {
+        emailModal.classList.add('hidden');
+    }
+}
+
+function skipEmail() {
+    // Mark as unknown user
+    if (sessionId) {
+        fetch(`${RAG_BACKEND_URL}/api/metrics/update-email`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, email: 'unknown' })
+        }).catch(err => console.error('Error updating email:', err));
+    }
+    closeEmailModal();
+    closeChat();
+}
+
+async function submitEmail() {
+    const email = userEmailInput.value.trim();
+    if (email && isValidEmail(email)) {
+        userEmail = email;
+        
+        // Show loading state
+        if (submitEmailBtn) {
+            submitEmailBtn.disabled = true;
+            submitEmailBtn.innerHTML = '<span class="btn-text">Submitting...</span>';
+        }
+        
+        // Update email in backend
+        if (sessionId) {
+            try {
+                await fetch(`${RAG_BACKEND_URL}/api/metrics/update-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, email })
+                });
+            } catch (error) {
+                console.error('Error updating email:', error);
+            }
+        }
+        
+        // Hide email modal and show thank you
+        if (emailModal) {
+            emailModal.classList.add('hidden');
+        }
+        
+        // Show thank you modal
+        if (thankyouModal) {
+            thankyouModal.classList.remove('hidden');
+        }
+        
+        // Close chat after a moment
+        setTimeout(() => {
+            if (thankyouModal) {
+                thankyouModal.classList.add('hidden');
+            }
+            closeChat();
+        }, 3000);
+    } else {
+        // Show error
+        if (userEmailInput) {
+            userEmailInput.classList.add('error');
+            userEmailInput.placeholder = 'Please enter a valid email address';
+            setTimeout(() => {
+                userEmailInput.classList.remove('error');
+                userEmailInput.placeholder = 'you@example.com';
+            }, 3000);
+        }
+    }
+}
+
+function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 async function handleSendMessage() {
@@ -110,20 +287,110 @@ async function handleSendMessage() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     try {
-        // Call RAG Backend API
-        const response = await callRAGBackend(message);
+        // Prepare session data for qualification tracking
+        const sessionData = {
+            messageCount: messageCount,
+            qualificationScore: qualificationScore,
+            calendlySuggested: calendlySuggested
+        };
+        
+        // Track engagement on first message
+        if (messageCount === 1 && sessionId) {
+            fetch(`${RAG_BACKEND_URL}/api/metrics/track-engagement`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionId })
+            }).catch(err => console.error('Error tracking engagement:', err));
+        }
+        
+        // Call RAG Backend API with session data
+        const response = await callRAGBackend(message, sessionData);
         
         // Hide typing indicator
         typingIndicator.classList.add('hidden');
         
+        // Track message
+        if (sessionId) {
+            fetch(`${RAG_BACKEND_URL}/api/metrics/track-message`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    sessionId, 
+                    message, 
+                    response: response.response 
+                })
+            }).catch(err => console.error('Error tracking message:', err));
+        }
+        
+        // Update qualification score
+        if (response.qualificationScore !== undefined) {
+            const previousScore = qualificationScore;
+            qualificationScore = response.qualificationScore;
+            qualificationStatus = response.qualificationStatus || 'browsing';
+            
+            // Track qualification
+            if (qualificationScore >= 50 && previousScore < 50 && sessionId) {
+                fetch(`${RAG_BACKEND_URL}/api/metrics/track-qualification`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, score: qualificationScore })
+                }).catch(err => console.error('Error tracking qualification:', err));
+            }
+            
+            // Log qualification progress (only if points were added)
+            if (response.pointsAdded > 0) {
+                console.log(`📊 Qualification: ${qualificationScore} points (${qualificationStatus})`);
+            }
+        }
+        
         // Add bot response to UI
         addMessageToUI(response.response, 'bot');
         
-        // Check for meeting booking keywords - open Calendly modal
-        if (checkForMeetingKeywords(message) || response.suggestCalendly) {
-            // Show Calendly modal instead of inline widget
+        // Check if lead just became qualified
+        const previousScore = qualificationScore - (response.pointsAdded || 0);
+        const justQualified = previousScore < 50 && qualificationScore >= 50;
+        
+        // Only suggest Calendly if lead is qualified AND not already suggested
+        // Also check if user explicitly asks for meeting
+        const userAskedForMeeting = checkForMeetingKeywords(message);
+        
+        if (userAskedForMeeting) {
+            // User explicitly asked - always show
             openCalendlyWidget();
             calendlySuggested = true;
+            
+            // Track meeting booking
+            if (sessionId) {
+                fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId })
+                }).catch(err => console.error('Error tracking meeting:', err));
+            }
+        } else if (response.suggestCalendly || justQualified) {
+            // Lead just qualified OR is qualified and AI suggests meeting
+            // Add a friendly message before showing Calendly
+            if (justQualified && !calendlySuggested) {
+                setTimeout(() => {
+                    addMessageToUI('🎉 Great! You\'re ready to take the next step. Let\'s schedule a meeting!', 'bot');
+                    setTimeout(() => {
+                        openCalendlyWidget();
+                        calendlySuggested = true;
+                    }, 500);
+                }, 300);
+            } else if (response.suggestCalendly && !calendlySuggested) {
+                openCalendlyWidget();
+                calendlySuggested = true;
+                
+                // Track meeting booking
+                if (sessionId) {
+                    fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId })
+                    }).catch(err => console.error('Error tracking meeting:', err));
+                }
+            }
         }
         
         // Add to conversation history
@@ -157,7 +424,7 @@ async function handleSendMessage() {
     }
 }
 
-async function callRAGBackend(message) {
+async function callRAGBackend(message, sessionData = {}) {
     try {
         // Create AbortController for timeout
         const controller = new AbortController();
@@ -170,7 +437,8 @@ async function callRAGBackend(message) {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    message: message
+                    message: message,
+                    sessionData: sessionData
                 }),
                 signal: controller.signal
             });
@@ -344,7 +612,14 @@ function loadCalendlyWidget() {
 
 function initCalendlyWidget() {
     const widgetElement = document.getElementById('calendly-widget');
+    const contentElement = document.querySelector('.calendly-content');
+    
     if (widgetElement && window.Calendly) {
+        // Show loading state
+        if (contentElement) {
+            contentElement.classList.add('loading');
+        }
+        
         // Clear any existing widget
         widgetElement.innerHTML = '';
         
@@ -355,6 +630,13 @@ function initCalendlyWidget() {
             prefill: {},
             utm: {}
         });
+        
+        // Remove loading state after widget loads
+        setTimeout(() => {
+            if (contentElement) {
+                contentElement.classList.remove('loading');
+            }
+        }, 1000);
     }
 }
 
@@ -363,12 +645,14 @@ function initCalendlyWidget() {
 // ============================================
 console.log('Chatbot initialized. Ready to chat!');
 
+// Disclaimer should show every time (removed sessionStorage persistence)
+// disclaimerAccepted is always false on page load
+
 // Check backend status on load
 window.addEventListener('load', async () => {
     const isBackendRunning = await checkBackendStatus();
     if (!isBackendRunning) {
         console.warn('⚠️ RAG Backend is not running. Please start the backend server.');
-        addMessageToUI('⚠️ RAG Backend is not running. Please start the backend server first.', 'bot');
     } else {
         console.log('✅ RAG Backend is running and ready!');
     }

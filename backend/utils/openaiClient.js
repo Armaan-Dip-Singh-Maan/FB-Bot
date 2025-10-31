@@ -12,10 +12,10 @@ const openai = new OpenAI({
  */
 async function generateEmbedding(text) {
   try {
+    // Explicitly create request without timeout parameter
     const response = await openai.embeddings.create({
       model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
-      input: text,
-      timeout: 10000, // 10 second timeout
+      input: text
     });
 
     return response.data[0].embedding;
@@ -90,8 +90,9 @@ CRITICAL RESPONSE RULES:
 
 ${context}`;
 
+    // Explicitly create request without timeout parameter
     const response = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo', // Faster model for quicker responses
+      model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
@@ -102,9 +103,8 @@ ${context}`;
           content: userMessage
         }
       ],
-      max_tokens: 50, // Drastically reduced to enforce 30-word limit
-      temperature: 0.7,
-      timeout: 15000 // 15 second timeout
+      max_tokens: 50,
+      temperature: 0.7
     });
 
     const responseText = response.choices[0].message.content;

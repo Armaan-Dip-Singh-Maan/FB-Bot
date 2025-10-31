@@ -4,7 +4,7 @@
 module.exports = {
     // Your Calendly username (the part after calendly.com/)
     // Example: if your Calendly link is https://calendly.com/john-doe, then username is 'john-doe'
-    username: 'armaandipsinghmaan',
+    username: 'franquiciaboost',
     
     // Optional: Customize the Calendly widget
     widget: {

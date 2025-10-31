@@ -8,6 +8,7 @@
     <script defer src="script.js"></script>
 </head>
 <body>
+
     <!-- Chatbot Toggle Button -->
     <button id="chatbot-toggle" class="chatbot-toggle">
         💬
@@ -33,11 +34,23 @@
                     <span class="status">● Online</span>
                 </div>
             </div>
+            <button id="feedback-btn" class="feedback-btn" title="Share feedback or provide email">📧</button>
             <button id="close-chat" class="close-btn">✕</button>
         </div>
 
         <!-- Chat Messages Area -->
         <div id="chat-messages" class="chat-messages">
+            <!-- AI Disclaimer Banner -->
+            <div id="disclaimer-banner" class="disclaimer-banner">
+                <div class="disclaimer-banner-content">
+                    <div class="disclaimer-icon">🤖</div>
+                    <div class="disclaimer-text">
+                        <strong>AI Chatbot Notice:</strong> This is an AI-powered assistant. While we strive for accuracy, the AI may occasionally make mistakes. Please verify important information.
+                    </div>
+                    <button id="close-disclaimer" class="close-disclaimer-btn">✕</button>
+                </div>
+            </div>
+            
             <!-- Initial welcome message -->
             <div class="message bot-message">
                 <div class="avatar">🤖</div>
@@ -82,6 +95,58 @@
                     <path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/>
                 </svg>
             </button>
+        </div>
+    </div>
+
+    <!-- Email Collection Modal -->
+    <div id="email-modal" class="email-modal hidden">
+        <div class="email-modal-content">
+            <div class="email-modal-header">
+                <div class="email-header-icon">📧</div>
+                <div>
+                    <h3>Stay Connected!</h3>
+                    <p class="email-header-subtitle">We'd love to keep in touch</p>
+                </div>
+                <button id="close-email-modal" class="close-email-btn">✕</button>
+            </div>
+            <div class="email-modal-body">
+                <div class="email-benefits">
+                    <div class="benefit-item">
+                        <span class="benefit-icon">🎯</span>
+                        <span>Get personalized franchise recommendations</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">📊</span>
+                        <span>Access exclusive franchise insights</span>
+                    </div>
+                    <div class="benefit-item">
+                        <span class="benefit-icon">💼</span>
+                        <span>Connect with franchise experts</span>
+                    </div>
+                </div>
+                <div class="email-input-wrapper">
+                    <label for="user-email-input" class="email-label">Your Email Address</label>
+                    <input type="email" id="user-email-input" class="email-input" placeholder="you@example.com" />
+                </div>
+                <p class="email-disclaimer">🔒 Your email is safe with us. No spam, we promise!</p>
+            </div>
+            <div class="email-modal-footer">
+                <button id="skip-email" class="btn-secondary">Maybe Later</button>
+                <button id="submit-email" class="btn-primary">
+                    <span class="btn-text">Continue</span>
+                    <span class="btn-icon">→</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Thank You Modal -->
+    <div id="thankyou-modal" class="thankyou-modal hidden">
+        <div class="thankyou-content">
+            <div class="thankyou-icon">✅</div>
+            <h3>Thank You!</h3>
+            <p>We've received your email and look forward to connecting with you soon.</p>
+            <button id="close-thankyou" class="btn-primary">Got it!</button>
         </div>
     </div>
 

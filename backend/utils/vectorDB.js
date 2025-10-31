@@ -1,4 +1,5 @@
 const fs = require('fs-extra');
+const fsSync = require('fs');
 const path = require('path');
 
 /**
@@ -10,7 +11,12 @@ class VectorDB {
     this.documents = [];
     this.dataPath = path.join(__dirname, '../data');
     this.vectorsPath = path.join(this.dataPath, 'vectors.json');
-    this.initializeDataDirectory();
+    this.loading = false;
+    this.loaded = false;
+    // Initialize asynchronously without blocking
+    this.initializeDataDirectory().catch(err => {
+      console.error('Error initializing vector DB:', err);
+    });
   }
 
   /**
@@ -20,8 +26,33 @@ class VectorDB {
     try {
       await fs.ensureDir(this.dataPath);
       await this.loadFromDisk();
+      this.loaded = true;
     } catch (error) {
       console.error('Error initializing data directory:', error);
+      this.loaded = true; // Mark as loaded even on error to prevent blocking
+    }
+  }
+
+  /**
+   * Ensure data is loaded before operations
+   */
+  async ensureLoaded() {
+    if (this.loaded) return;
+    
+    if (this.loading) {
+      // Wait for ongoing load
+      while (this.loading) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return;
+    }
+    
+    this.loading = true;
+    try {
+      await this.loadFromDisk();
+      this.loaded = true;
+    } finally {
+      this.loading = false;
     }
   }
 
@@ -42,6 +73,8 @@ class VectorDB {
    * @returns {Array} Array of similar documents
    */
   async search(queryEmbedding, topK = 5) {
+    await this.ensureLoaded();
+    
     if (this.documents.length === 0) {
       return [];
     }
@@ -106,6 +139,7 @@ class VectorDB {
    * @returns {number} Document count
    */
   async getDocumentCount() {
+    await this.ensureLoaded();
     return this.documents.length;
   }
 
@@ -130,13 +164,17 @@ class VectorDB {
   }
 
   /**
-   * Load documents from disk
+   * Load documents from disk (synchronous for faster loading)
    */
   async loadFromDisk() {
     try {
-      if (await fs.pathExists(this.vectorsPath)) {
-        this.documents = await fs.readJson(this.vectorsPath);
-        console.log(`Loaded ${this.documents.length} documents from disk`);
+      if (fsSync.existsSync(this.vectorsPath)) {
+        // Use readFileSync for faster loading on startup
+        const data = fsSync.readFileSync(this.vectorsPath, 'utf8');
+        this.documents = JSON.parse(data);
+        console.log(`✅ Loaded ${this.documents.length} documents from disk`);
+      } else {
+        console.log(`📁 No existing vectors file found, will initialize fresh`);
       }
     } catch (error) {
       console.error('Error loading from disk:', error);

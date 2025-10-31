@@ -10,6 +10,9 @@ const { processPDF } = require('./utils/pdfProcessor');
 const { VectorDB } = require('./utils/vectorDB');
 const { generateEmbedding, generateResponse } = require('./utils/openaiClient');
 const { initializeKnowledgeBase } = require('./utils/initializeKnowledgeBase');
+const { LeadQualification } = require('./utils/leadQualification');
+const { SecurityValidator } = require('./utils/security');
+const { MetricsTracker } = require('./utils/metricsTracker');
 const calendlyConfig = require('./config/calendly');
 const websiteConfig = require('./config/website');
 const { WebsiteContentUpdater } = require('./scripts/update-website-content');
@@ -23,8 +26,14 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '../')));
 
 
-// Initialize Vector Database
+// Initialize Vector Database (loads asynchronously)
 const vectorDB = new VectorDB();
+
+// Initialize Metrics Tracker (loads asynchronously)
+const metricsTracker = new MetricsTracker();
+
+// Track if server is ready
+let serverReady = false;
 
 // Routes
 app.get('/', (req, res) => {
@@ -40,15 +49,48 @@ app.post('/api/chat', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { message } = req.body;
+    const { message, sessionData = {} } = req.body;
 
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Generate embedding for user query (with timeout)
+    // Security validation
+    const securityValidator = new SecurityValidator();
+    const securityCheck = securityValidator.validateForLLM(message);
+    
+    if (!securityCheck.isValid) {
+      console.warn(`⚠️ Security threat detected: ${securityCheck.threats.join(', ')}`);
+      
+      // Return a safe response without processing
+      return res.json({
+        response: securityCheck.sanitized || 'I\'m here to help with franchise opportunities. What are you looking for?',
+        suggestCalendly: false,
+        qualificationScore: sessionData.qualificationScore || 0,
+        qualificationStatus: 'browsing',
+        pointsAdded: 0,
+        isQualified: false,
+        securityWarning: true
+      });
+    }
+
+    // Use sanitized message
+    const sanitizedMessage = securityCheck.sanitized;
+
+    // Initialize lead qualification system
+    const leadQualifier = new LeadQualification();
+    
+    // Analyze message for qualification points (use sanitized message)
+    const qualification = leadQualifier.analyzeMessage(sanitizedMessage, {
+      messageCount: sessionData.messageCount || 1,
+      currentScore: sessionData.qualificationScore || 0
+    });
+    
+    const totalScore = qualification.totalScore;
+
+    // Generate embedding for user query (with timeout, use sanitized message)
     const queryEmbedding = await Promise.race([
-      generateEmbedding(message),
+      generateEmbedding(sanitizedMessage),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Embedding generation timeout')), 10000)
       )
@@ -77,20 +119,49 @@ app.post('/api/chat', async (req, res) => {
       context = '';
     }
 
-    // Generate response using OpenAI with context (with timeout)
+    // Sanitize context before passing to LLM
+    context = securityValidator.sanitizeContext(context);
+
+    // Generate response using OpenAI with context (with timeout, use sanitized message)
     const response = await Promise.race([
-      generateResponse(message, context),
+      generateResponse(sanitizedMessage, context),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Response generation timeout')), 15000)
       )
     ]);
 
+    // Check if lead just reached qualification threshold
+    const previousScore = sessionData.qualificationScore || 0;
+    const justQualified = previousScore < leadQualifier.qualificationThreshold && 
+                         qualification.totalScore >= leadQualifier.qualificationThreshold;
+
+    // Check if lead is qualified for meeting suggestion
+    const alreadySuggested = sessionData.calendlySuggested || false;
+    const shouldSuggestMeeting = qualification.totalScore >= leadQualifier.qualificationThreshold && !alreadySuggested;
+    
+    // Override AI suggestion - only suggest if qualified OR user explicitly asked
+    const suggestCalendly = shouldSuggestMeeting || justQualified ||
+      (response.suggestCalendly && qualification.isQualified);
+
     const elapsedTime = Date.now() - startTime;
+    const qualificationStatus = leadQualifier.getQualificationStatus(totalScore);
+    
     console.log(`✅ Chat response in ${elapsedTime}ms`);
+    console.log(`📊 Lead Score: ${totalScore}/${leadQualifier.qualificationThreshold} (${qualificationStatus})`);
+    if (qualification.reasons.length > 0) {
+      console.log(`   Reasons: ${qualification.reasons.join(', ')}`);
+    }
+    if (justQualified) {
+      console.log(`🎉 Lead just qualified! Meeting suggestion: ${suggestCalendly}`);
+    }
 
     res.json({ 
       response: response.response,
-      suggestCalendly: response.suggestCalendly
+      suggestCalendly: suggestCalendly,
+      qualificationScore: totalScore,
+      qualificationStatus: qualificationStatus,
+      pointsAdded: qualification.points,
+      isQualified: qualification.isQualified
     });
 
   } catch (error) {
@@ -177,6 +248,163 @@ app.delete('/api/clear', async (req, res) => {
   }
 });
 
+// ============================================
+// METRICS TRACKING ENDPOINTS
+// ============================================
+
+// Track visitor
+app.post('/api/metrics/track-visitor', async (req, res) => {
+  try {
+    const { sessionId, email } = req.body;
+    await metricsTracker.trackVisitor(sessionId, email);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking visitor:', error);
+    res.status(500).json({ error: 'Failed to track visitor' });
+  }
+});
+
+// Track engagement
+app.post('/api/metrics/track-engagement', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    await metricsTracker.trackEngagement(sessionId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking engagement:', error);
+    res.status(500).json({ error: 'Failed to track engagement' });
+  }
+});
+
+// Track message
+app.post('/api/metrics/track-message', async (req, res) => {
+  try {
+    const { sessionId, message, response } = req.body;
+    await metricsTracker.trackMessage(sessionId, message, response);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking message:', error);
+    res.status(500).json({ error: 'Failed to track message' });
+  }
+});
+
+// Track qualification
+app.post('/api/metrics/track-qualification', async (req, res) => {
+  try {
+    const { sessionId, score } = req.body;
+    await metricsTracker.trackQualification(sessionId, score);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking qualification:', error);
+    res.status(500).json({ error: 'Failed to track qualification' });
+  }
+});
+
+// Track meeting booking
+app.post('/api/metrics/track-meeting', async (req, res) => {
+  try {
+    const { sessionId } = req.body;
+    await metricsTracker.trackMeetingBooking(sessionId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking meeting:', error);
+    res.status(500).json({ error: 'Failed to track meeting' });
+  }
+});
+
+// Track drop-off
+app.post('/api/metrics/track-dropoff', async (req, res) => {
+  try {
+    const { sessionId, messageCount } = req.body;
+    await metricsTracker.trackDropOff(sessionId, messageCount);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error tracking drop-off:', error);
+    res.status(500).json({ error: 'Failed to track drop-off' });
+  }
+});
+
+// Update user email
+app.post('/api/metrics/update-email', async (req, res) => {
+  try {
+    const { sessionId, email } = req.body;
+    await metricsTracker.updateUserEmail(sessionId, email);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error updating email:', error);
+    res.status(500).json({ error: 'Failed to update email' });
+  }
+});
+
+// ============================================
+// ADMIN DASHBOARD
+// ============================================
+
+// Admin login
+app.post('/api/admin/login', (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (username === 'admin' && password === 'FB12345@') {
+      // Simple session token (in production, use proper JWT)
+      const token = Buffer.from(`admin:${Date.now()}`).toString('base64');
+      res.json({ success: true, token });
+    } else {
+      res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Login failed' });
+  }
+});
+
+// Verify admin token
+function verifyAdmin(req, res, next) {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  try {
+    // Simple validation (in production, use proper JWT verification)
+    const decoded = Buffer.from(token, 'base64').toString('utf-8');
+    if (decoded.startsWith('admin:')) {
+      next();
+    } else {
+      res.status(401).json({ error: 'Invalid token' });
+    }
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+}
+
+// Get metrics (admin only)
+app.get('/api/admin/metrics', verifyAdmin, async (req, res) => {
+  try {
+    const metrics = await metricsTracker.getMetrics();
+    res.json({ success: true, metrics });
+  } catch (error) {
+    console.error('Error getting metrics:', error);
+    res.status(500).json({ success: false, error: 'Failed to get metrics' });
+  }
+});
+
+// Get sessions (admin only)
+app.get('/api/admin/sessions', verifyAdmin, async (req, res) => {
+  try {
+    const sessions = await metricsTracker.getSessions();
+    res.json({ success: true, sessions });
+  } catch (error) {
+    console.error('Error getting sessions:', error);
+    res.status(500).json({ success: false, error: 'Failed to get sessions' });
+  }
+});
+
+// Admin dashboard page
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, '../admin.html'));
+});
+
 // Error handling middleware
 app.use((error, req, res, next) => {
   res.status(500).json({ error: error.message });
@@ -208,20 +436,26 @@ function scheduleWebsiteUpdates() {
   });
 }
 
-// Initialize knowledge base on startup
-initializeKnowledgeBase().then(() => {
-    // Schedule website content updates
-    scheduleWebsiteUpdates();
+// Start server immediately, initialize knowledge base in background
+app.listen(PORT, () => {
+    serverReady = true;
+    console.log(`🚀 RAG Backend server running on port ${PORT}`);
+    console.log(`📁 PDF directory: ${path.join(__dirname, '../pdfs')}`);
+    console.log(`🌐 Website scraping: ${websiteConfig.baseUrl}`);
+    console.log(`⏰ Update schedule: ${websiteConfig.cronSchedule}`);
+    console.log(`🔑 Make sure to set your OPENAI_API_KEY in .env file`);
+    console.log(`💬 Chatbot ready! Open http://localhost:${PORT} to start chatting`);
+    console.log(`\n⏳ Initializing knowledge base in background...`);
     
-    app.listen(PORT, () => {
-        console.log(`🚀 RAG Backend server running on port ${PORT}`);
-        console.log(`📁 PDF directory: ${path.join(__dirname, '../pdfs')}`);
-        console.log(`🌐 Website scraping: ${websiteConfig.baseUrl}`);
-        console.log(`⏰ Update schedule: ${websiteConfig.cronSchedule}`);
-        console.log(`🔑 Make sure to set your OPENAI_API_KEY in .env file`);
-        console.log(`💬 Chatbot ready! Open http://localhost:${PORT} to start chatting`);
-    });
-}).catch((error) => {
-    console.error('❌ Failed to initialize knowledge base:', error);
-    process.exit(1);
+    // Initialize knowledge base in background (non-blocking)
+    initializeKnowledgeBase()
+        .then(() => {
+            console.log(`✅ Knowledge base initialization complete!`);
+            // Schedule website content updates after KB is ready
+            scheduleWebsiteUpdates();
+        })
+        .catch((error) => {
+            console.error('⚠️ Knowledge base initialization error (server still running):', error.message);
+            // Server continues running even if KB init fails
+        });
 });

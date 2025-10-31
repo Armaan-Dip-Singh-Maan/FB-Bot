@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Franquicia Boost</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        }
+
+        .login-box {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-box h2 {
+            margin-bottom: 24px;
+            color: #2563eb;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #1d4ed8;
+        }
+
+        .error-message {
+            color: #ef4444;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        .dashboard-container {
+            padding: 24px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .dashboard-header {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .dashboard-header h1 {
+            color: #2563eb;
+        }
+
+        .logout-btn {
+            padding: 10px 20px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .metric-card h3 {
+            color: #6b7280;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric-value {
+            font-size: 36px;
+            font-weight: 700;
+            color: #2563eb;
+            margin-bottom: 8px;
+        }
+
+        .metric-label {
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        .sessions-table {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }
+
+        .sessions-table h2 {
+            margin-bottom: 20px;
+            color: #2563eb;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        th {
+            background: #f9fafb;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-qualified {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .badge-not-qualified {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .badge-booked {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .chart-card {
+            background: white;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .chart-card h3 {
+            margin-bottom: 20px;
+            color: #2563eb;
+            font-size: 18px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .refresh-btn {
+            padding: 10px 20px;
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+
+        .refresh-btn:hover {
+            background: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="login-screen" class="login-container">
+        <div class="login-box">
+            <h2>🔐 Admin Login</h2>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" required autocomplete="username" />
+                </div>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" required autocomplete="current-password" />
+                </div>
+                <button type="submit" class="btn">Login</button>
+                <div id="login-error" class="error-message hidden"></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Dashboard -->
+    <div id="dashboard-screen" class="hidden">
+        <div class="dashboard-container">
+            <div class="dashboard-header">
+                <h1>📊 Admin Dashboard</h1>
+                <button class="logout-btn" onclick="logout()">Logout</button>
+            </div>
+
+            <button class="refresh-btn" onclick="loadMetrics()">🔄 Refresh Data</button>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <h3>Total Visitors</h3>
+                    <div class="metric-value" id="total-visitors">0</div>
+                    <div class="metric-label">People who opened chat</div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>Engagement Rate</h3>
+                    <div class="metric-value" id="engagement-rate">0%</div>
+                    <div class="metric-label">Visitors who sent messages</div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>Avg Conversation Length</h3>
+                    <div class="metric-value" id="avg-length">0</div>
+                    <div class="metric-label">Messages per conversation</div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>Qualification Rate</h3>
+                    <div class="metric-value" id="qualification-rate">0%</div>
+                    <div class="metric-label">Leads reaching 50+ points</div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>Meeting Booking Rate</h3>
+                    <div class="metric-value" id="meeting-rate">0%</div>
+                    <div class="metric-label">Booked meetings</div>
+                </div>
+
+                <div class="metric-card">
+                    <h3>Total Messages</h3>
+                    <div class="metric-value" id="total-messages">0</div>
+                    <div class="metric-label">All conversation messages</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; margin-bottom: 24px;">
+                <div class="chart-card">
+                    <h3>Engagement Metrics</h3>
+                    <canvas id="engagementChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Conversion Funnel</h3>
+                    <canvas id="funnelChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>Drop-off Points</h3>
+                    <canvas id="dropoffChart"></canvas>
+                </div>
+                <div class="chart-card">
+                    <h3>User Type Distribution</h3>
+                    <canvas id="userTypeChart"></canvas>
+                </div>
+            </div>
+
+            <div class="sessions-table">
+                <h2>Recent Sessions</h2>
+                <div id="sessions-container">
+                    <p>Loading sessions...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3001';
+        let authToken = null;
+
+        // Check if already logged in
+        const savedToken = localStorage.getItem('adminToken');
+        if (savedToken) {
+            authToken = savedToken;
+            showDashboard();
+        }
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_URL}/api/admin/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    authToken = data.token;
+                    localStorage.setItem('adminToken', authToken);
+                    showDashboard();
+                } else {
+                    showError(data.error || 'Login failed');
+                }
+            } catch (error) {
+                showError('Connection error. Make sure the backend is running.');
+            }
+        });
+
+        function showError(message) {
+            const errorDiv = document.getElementById('login-error');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        function showDashboard() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('dashboard-screen').classList.remove('hidden');
+            loadMetrics();
+            loadSessions();
+        }
+
+        function logout() {
+            authToken = null;
+            localStorage.removeItem('adminToken');
+            document.getElementById('login-screen').classList.remove('hidden');
+            document.getElementById('dashboard-screen').classList.add('hidden');
+            document.getElementById('login-form').reset();
+            document.getElementById('login-error').classList.add('hidden');
+        }
+
+        async function loadMetrics() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/metrics`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const metrics = data.metrics;
+                    document.getElementById('total-visitors').textContent = metrics.totalVisitors;
+                    document.getElementById('engagement-rate').textContent = metrics.engagementRate;
+                    document.getElementById('avg-length').textContent = metrics.avgConversationLength;
+                    document.getElementById('qualification-rate').textContent = metrics.qualificationRate;
+                    document.getElementById('meeting-rate').textContent = metrics.meetingBookingRate;
+                    document.getElementById('total-messages').textContent = metrics.totalMessages;
+                    
+                    // Initialize/update charts
+                    initializeCharts(metrics);
+                }
+            } catch (error) {
+                console.error('Error loading metrics:', error);
+            }
+        }
+
+        async function loadSessions() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/sessions`, {
+                    headers: {
+                        'Authorization': `Bearer ${authToken}`
+                    }
+                });
+                
+                if (response.status === 401) {
+                    logout();
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    displaySessions(data.sessions.slice(-50).reverse()); // Show last 50 sessions
+                }
+            } catch (error) {
+                console.error('Error loading sessions:', error);
+            }
+        }
+
+        function displaySessions(sessions) {
+            const container = document.getElementById('sessions-container');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<p>No sessions yet.</p>';
+                return;
+            }
+            
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Messages</th>
+                            <th>Qualified</th>
+                            <th>Meeting Booked</th>
+                            <th>Drop-off Point</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            sessions.forEach(session => {
+                const date = new Date(session.startTime).toLocaleString();
+                html += `
+                    <tr>
+                        <td>${session.email === 'unknown' ? 'Unknown User' : session.email}</td>
+                        <td>${session.messageCount || 0}</td>
+                        <td>
+                            <span class="badge ${session.qualified ? 'badge-qualified' : 'badge-not-qualified'}">
+                                ${session.qualified ? 'Yes' : 'No'}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge ${session.meetingBooked ? 'badge-booked' : ''}">
+                                ${session.meetingBooked ? 'Yes' : 'No'}
+                            </span>
+                        </td>
+                        <td>${session.dropOffPoint || '-'}</td>
+                        <td>${date}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        // Chart instances
+        let engagementChart = null;
+        let funnelChart = null;
+        let dropoffChart = null;
+        let userTypeChart = null;
+
+        function initializeCharts(metrics) {
+            // Engagement Metrics Chart
+            const engagementCtx = document.getElementById('engagementChart');
+            if (engagementChart) engagementChart.destroy();
+            engagementChart = new Chart(engagementCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Engaged', 'Not Engaged'],
+                    datasets: [{
+                        data: [
+                            metrics.engagedVisitors || 0,
+                            (metrics.totalVisitors || 0) - (metrics.engagedVisitors || 0)
+                        ],
+                        backgroundColor: ['#2563eb', '#e5e7eb'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // Conversion Funnel Chart
+            const funnelCtx = document.getElementById('funnelChart');
+            if (funnelChart) funnelChart.destroy();
+            funnelChart = new Chart(funnelCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Visitors', 'Engaged', 'Qualified', 'Booked'],
+                    datasets: [{
+                        label: 'Conversion Funnel',
+                        data: [
+                            metrics.totalVisitors || 0,
+                            metrics.engagedVisitors || 0,
+                            metrics.qualifiedLeads || 0,
+                            metrics.meetingsBooked || 0
+                        ],
+                        backgroundColor: [
+                            '#2563eb',
+                            '#3b82f6',
+                            '#60a5fa',
+                            '#93c5fd'
+                        ],
+                        borderRadius: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
+                    }
+                }
+            });
+
+            // Drop-off Points Chart
+            const dropoffCtx = document.getElementById('dropoffChart');
+            if (dropoffChart) dropoffChart.destroy();
+            const dropoffData = metrics.dropOffPoints || {};
+            dropoffChart = new Chart(dropoffCtx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(dropoffData).map(key => 
+                        key.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+                    ),
+                    datasets: [{
+                        data: Object.values(dropoffData),
+                        backgroundColor: [
+                            '#ef4444',
+                            '#f97316',
+                            '#f59e0b',
+                            '#10b981'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+
+            // User Type Distribution
+            const userTypeCtx = document.getElementById('userTypeChart');
+            if (userTypeChart) userTypeChart.destroy();
+            userTypeChart = new Chart(userTypeCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Known Users', 'Unknown Users'],
+                    datasets: [{
+                        data: [
+                            metrics.knownUsers || 0,
+                            metrics.unknownUsers || 0
+                        ],
+                        backgroundColor: ['#10b981', '#6b7280'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            if (authToken) {
+                loadMetrics();
+                loadSessions();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
+
