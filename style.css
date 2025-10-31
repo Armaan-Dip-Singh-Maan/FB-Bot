@@ -37,6 +37,91 @@ body {
     display: none;
 }
 
+/* WhatsApp Widget - Floating Side Button */
+.whatsapp-widget-side {
+    position: fixed;
+    bottom: 160px;
+    right: 20px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: #25D366;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 998;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.whatsapp-widget-side:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(37, 211, 102, 0.5);
+}
+
+.whatsapp-widget-side svg {
+    width: 32px;
+    height: 32px;
+}
+
+.whatsapp-tooltip {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    background: #333;
+    color: white;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+.whatsapp-widget-side:hover .whatsapp-tooltip {
+    opacity: 1;
+}
+
+.whatsapp-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    right: 20px;
+    border: 5px solid transparent;
+    border-top-color: #333;
+}
+
+/* WhatsApp Widget - Inside Chat Input */
+.whatsapp-widget {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #25D366;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.2s;
+    border: none;
+}
+
+.whatsapp-widget:hover {
+    background: #20BA5A;
+    transform: scale(1.05);
+}
+
+.whatsapp-widget svg {
+    width: 20px;
+    height: 20px;
+}
+
 /* Chatbot Container */
 .chatbot-container {
     position: fixed;
@@ -234,6 +319,7 @@ body {
     border-top: 1px solid #e5e7eb;
     display: flex;
     gap: 8px;
+    align-items: center;
 }
 
 #user-input {
@@ -341,12 +427,16 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.7);
     z-index: 10000;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: fadeIn 0.3s ease;
+}
+
+.calendly-overlay.hidden {
+    display: none;
 }
 
 @keyframes fadeIn {
@@ -357,12 +447,14 @@ body {
 .calendly-modal {
     background: white;
     border-radius: 12px;
-    width: 90%;
-    max-width: 800px;
-    max-height: 90vh;
+    width: 95%;
+    max-width: 900px;
+    max-height: 95vh;
     overflow: hidden;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
     animation: slideUp 0.3s ease;
+    display: flex;
+    flex-direction: column;
 }
 
 @keyframes slideUp {
@@ -412,8 +504,10 @@ body {
 
 .calendly-content {
     padding: 0;
-    height: 600px;
+    flex: 1;
+    min-height: 600px;
     overflow: hidden;
+    background: #f9fafb;
 }
 
 .calendly-widget {
@@ -432,13 +526,24 @@ body {
         border-radius: 0;
     }
     
+    .whatsapp-widget-side {
+        bottom: 20px;
+        right: 20px;
+    }
+    
+    .whatsapp-widget-side:hover .whatsapp-tooltip {
+        opacity: 0; /* Hide tooltip on mobile */
+    }
+    
     .calendly-modal {
-        width: 95%;
-        height: 95vh;
-        border-radius: 8px;
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        border-radius: 0;
     }
     
     .calendly-content {
-        height: calc(100% - 60px);
+        min-height: calc(100vh - 60px);
+        height: calc(100vh - 60px);
     }
 }

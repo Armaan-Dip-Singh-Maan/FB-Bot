@@ -8,7 +8,7 @@ const websiteConfig = require('../config/website');
  * Website Scraper Module
  * Handles scraping website content and converting it to text chunks
  */
-class WebsiteScraper {
+class WebsiteScraper { 
     constructor() {
         this.config = websiteConfig;
         this.visitedUrls = new Set();

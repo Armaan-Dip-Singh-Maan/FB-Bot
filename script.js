@@ -4,6 +4,17 @@
 const RAG_BACKEND_URL = 'http://localhost:3001';
 const API_URL = `${RAG_BACKEND_URL}/api/chat`;
 
+// WhatsApp Configuration
+// Replace with your WhatsApp number (format: country code + number, no + or spaces)
+// Example: '1234567890' for US number (123) 456-7890
+// WhatsApp number: Remove all non-numeric characters for wa.me URL
+// Format: country code + number (e.g., '13683999991' for +1(368)399-9991)
+const WHATSAPP_NUMBER = '13683999991'; // Extracted from +1(368)399-9991
+const WHATSAPP_MESSAGE = 'Hello! I\'d like to learn more about Franquicia Boost.'; // Default message
+
+// Calendly Configuration
+const CALENDLY_URL = 'https://calendly.com/franquiciaboost';
+
 // ============================================
 // STATE MANAGEMENT
 // ============================================
@@ -22,6 +33,10 @@ const chatMessages = document.getElementById('chat-messages');
 const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const typingIndicator = document.getElementById('typing-indicator');
+const whatsappWidget = document.getElementById('whatsapp-widget');
+const whatsappWidgetSide = document.getElementById('whatsapp-widget-side');
+const calendlyOverlay = document.getElementById('calendly-overlay');
+const closeCalendlyBtn = document.getElementById('close-calendly');
 
 
 // ============================================
@@ -30,12 +45,26 @@ const typingIndicator = document.getElementById('typing-indicator');
 chatbotToggle.addEventListener('click', openChat);
 closeBtn.addEventListener('click', closeChat);
 sendBtn.addEventListener('click', handleSendMessage);
+whatsappWidget.addEventListener('click', handleWhatsAppClick);
+if (whatsappWidgetSide) {
+    whatsappWidgetSide.addEventListener('click', handleWhatsAppClick);
+}
+closeCalendlyBtn.addEventListener('click', closeCalendlyWidget);
 
 userInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
         handleSendMessage();
     }
 });
+
+// Close Calendly on overlay click
+if (calendlyOverlay) {
+    calendlyOverlay.addEventListener('click', (e) => {
+        if (e.target === calendlyOverlay) {
+            closeCalendlyWidget();
+        }
+    });
+}
 
 
 // ============================================
@@ -59,13 +88,7 @@ async function handleSendMessage() {
     // Validation
     if (!message || isProcessing) return;
     
-    // Check if backend is running
-    if (!await checkBackendStatus()) {
-        addMessageToUI('⚠️ RAG backend is not running. Please start the backend server first.', 'bot');
-        return;
-    }
-    
-    // Clear input and disable button
+    // Clear input and disable button immediately (don't wait for backend check)
     userInput.value = '';
     isProcessing = true;
     sendBtn.disabled = true;
@@ -96,14 +119,10 @@ async function handleSendMessage() {
         // Add bot response to UI
         addMessageToUI(response.response, 'bot');
         
-        // Check for meeting booking keywords
-        if (checkForMeetingKeywords(message) && !calendlySuggested) {
-            addCalendlySuggestion();
-            calendlySuggested = true;
-        }
-        // Check if we should suggest Calendly (after 12+ messages and not already suggested)
-        else if (response.suggestCalendly && messageCount >= 12 && !calendlySuggested) {
-            addCalendlySuggestion();
+        // Check for meeting booking keywords - open Calendly modal
+        if (checkForMeetingKeywords(message) || response.suggestCalendly) {
+            // Show Calendly modal instead of inline widget
+            openCalendlyWidget();
             calendlySuggested = true;
         }
         
@@ -140,30 +159,45 @@ async function handleSendMessage() {
 
 async function callRAGBackend(message) {
     try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: message
-            })
-        });
+        // Create AbortController for timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
         
-        // Check if response is ok
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            throw new Error(`Backend Error ${response.status}: ${errorData.error || response.statusText}`);
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: message
+                }),
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            // Check if response is ok
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(`Backend Error ${response.status}: ${errorData.error || response.statusText}`);
+            }
+            
+            const data = await response.json();
+            
+            if (!data || !data.response) {
+                console.error('Invalid backend response:', data);
+                throw new Error('Invalid response from RAG backend');
+            }
+            
+            return data;
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Request timeout - Please try again');
+            }
+            throw fetchError;
         }
-        
-        const data = await response.json();
-        
-        if (!data || !data.response) {
-            console.error('Invalid backend response:', data);
-            throw new Error('Invalid response from RAG backend');
-        }
-        
-        return data;
         
     } catch (error) {
         console.error('RAG Backend Error:', error);
@@ -250,80 +284,49 @@ function checkForMeetingKeywords(message) {
 }
 
 // ============================================
+// WHATSAPP INTEGRATION
+// ============================================
+
+function handleWhatsAppClick(e) {
+    e.preventDefault();
+    
+    // Check if WhatsApp number is configured
+    if (WHATSAPP_NUMBER === 'YOUR_WHATSAPP_NUMBER') {
+        alert('Please configure your WhatsApp number in script.js');
+        console.error('WhatsApp number not configured. Please update WHATSAPP_NUMBER in script.js');
+        return;
+    }
+    
+    // Create WhatsApp URL
+    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+    
+    // Open WhatsApp in new tab
+    window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
+}
+
+// ============================================
 // CALENDLY INTEGRATION
 // ============================================
 
-function addCalendlySuggestion() {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'message bot-message calendly-suggestion';
-    
-    const avatarDiv = document.createElement('div');
-    avatarDiv.className = 'avatar';
-    avatarDiv.textContent = '🤖';
-    
-    const bubbleDiv = document.createElement('div');
-    bubbleDiv.className = 'bubble calendly-bubble';
-    
-    bubbleDiv.innerHTML = `
-        <div class="calendly-suggestion-content">
-            <h4>📅 Perfect! Let's schedule that call</h4>
-            <p>Pick a time that works for you below 👇</p>
-            <div id="calendly-inline-widget" class="calendly-inline-widget" 
-                 data-url="https://calendly.com/armaandipsinghmaan" 
-                 data-min-width="300" 
-                 data-height="400">
-            </div>
-        </div>
-    `;
-    
-    messageDiv.appendChild(avatarDiv);
-    messageDiv.appendChild(bubbleDiv);
-    
-    chatMessages.appendChild(messageDiv);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-    
-    // Load Calendly widget directly
-    loadCalendlyInlineWidget();
-}
-
 function openCalendlyWidget() {
-    // Create Calendly widget overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'calendly-overlay';
-    overlay.className = 'calendly-overlay';
-    
-    overlay.innerHTML = `
-        <div class="calendly-modal">
-            <div class="calendly-header">
-                <h3>Schedule a Call with Our Founder</h3>
-                <button id="close-calendly" class="close-calendly">✕</button>
-            </div>
-            <div class="calendly-content">
-                <div id="calendly-widget" class="calendly-widget">
-                    <!-- Calendly widget will be loaded here -->
-                </div>
-            </div>
-        </div>
-    `;
-    
-    document.body.appendChild(overlay);
-    
-    // Load Calendly widget
-    loadCalendlyWidget();
-    
-    // Add close event listener
-    const closeBtn = document.getElementById('close-calendly');
-    closeBtn.addEventListener('click', closeCalendlyWidget);
-    
-    // Close on overlay click
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) {
-            closeCalendlyWidget();
-        }
-    });
+    // Show the overlay
+    if (calendlyOverlay) {
+        calendlyOverlay.classList.remove('hidden');
+        document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        
+        // Load Calendly widget if not already loaded
+        loadCalendlyWidget();
+    }
 }
 
-function loadCalendlyInlineWidget() {
+function closeCalendlyWidget() {
+    if (calendlyOverlay) {
+        calendlyOverlay.classList.add('hidden');
+        document.body.style.overflow = ''; // Restore scrolling
+    }
+}
+
+function loadCalendlyWidget() {
     // Load Calendly script if not already loaded
     if (!window.Calendly) {
         const script = document.createElement('script');
@@ -340,21 +343,18 @@ function loadCalendlyInlineWidget() {
 }
 
 function initCalendlyWidget() {
-    const widgetElement = document.getElementById('calendly-inline-widget');
+    const widgetElement = document.getElementById('calendly-widget');
     if (widgetElement && window.Calendly) {
+        // Clear any existing widget
+        widgetElement.innerHTML = '';
+        
+        // Initialize Calendly popup widget
         window.Calendly.initInlineWidget({
-            url: 'https://calendly.com/armaandipsinghmaan',
+            url: CALENDLY_URL,
             parentElement: widgetElement,
             prefill: {},
             utm: {}
         });
-    }
-}
-
-function closeCalendlyWidget() {
-    const overlay = document.getElementById('calendly-overlay');
-    if (overlay) {
-        overlay.remove();
     }
 }
 

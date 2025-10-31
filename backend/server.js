@@ -34,6 +34,11 @@ app.get('/', (req, res) => {
 
 // Chat endpoint with RAG
 app.post('/api/chat', async (req, res) => {
+  // Set timeout for the entire request (25 seconds)
+  req.setTimeout(25000);
+  
+  const startTime = Date.now();
+  
   try {
     const { message } = req.body;
 
@@ -41,36 +46,47 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Generate embedding for user query
-    const queryEmbedding = await generateEmbedding(message);
+    // Generate embedding for user query (with timeout)
+    const queryEmbedding = await Promise.race([
+      generateEmbedding(message),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Embedding generation timeout')), 10000)
+      )
+    ]);
 
-    // Search for relevant documents (increased from 5 to 10 for more context)
-    const relevantDocs = await vectorDB.search(queryEmbedding, 10);
+    // Search for relevant documents (reduced to 5 for faster processing)
+    const relevantDocs = await vectorDB.search(queryEmbedding, 5);
 
-    // Prepare context from relevant documents with better formatting
-    // Lower similarity threshold to 0.05 to get more results
+    // Prepare context from relevant documents - simplified for speed
     const filteredDocs = relevantDocs.filter(doc => doc.similarity > 0.05);
     
     let context;
     if (filteredDocs.length > 0) {
+      // Limit to top 2 most relevant for maximum speed
       context = filteredDocs
-        .map(doc => `[Source: ${doc.metadata.fileName}, Page ${doc.metadata.page}]\n${doc.text}`)
-        .join('\n\n---\n\n');
-    } else {
-      // If no relevant chunks found, use the most similar ones anyway
+        .slice(0, 2)
+        .map(doc => doc.text)
+        .join('\n\n');
+    } else if (relevantDocs.length > 0) {
+      // If no relevant chunks found, use top 2 most similar
       context = relevantDocs
-        .slice(0, 8) // Take top 8 even if similarity is low
-        .map(doc => `[Source: ${doc.metadata.fileName}, Page ${doc.metadata.page}]\n${doc.text}`)
-        .join('\n\n---\n\n');
+        .slice(0, 2)
+        .map(doc => doc.text)
+        .join('\n\n');
+    } else {
+      context = '';
     }
 
-    console.log(`Found ${filteredDocs.length} relevant chunks for query: "${message}"`);
-    console.log(`Context length: ${context.length} characters`);
-    console.log(`Top similarity scores: ${relevantDocs.slice(0, 3).map(d => d.similarity.toFixed(3)).join(', ')}`);
-    console.log(`Context preview: ${context.substring(0, 200)}...`);
+    // Generate response using OpenAI with context (with timeout)
+    const response = await Promise.race([
+      generateResponse(message, context),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Response generation timeout')), 15000)
+      )
+    ]);
 
-    // Generate response using OpenAI with context
-    const response = await generateResponse(message, context);
+    const elapsedTime = Date.now() - startTime;
+    console.log(`✅ Chat response in ${elapsedTime}ms`);
 
     res.json({ 
       response: response.response,
@@ -78,8 +94,16 @@ app.post('/api/chat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in chat:', error);
-    res.status(500).json({ error: 'Failed to generate response: ' + error.message });
+    const elapsedTime = Date.now() - startTime;
+    console.error(`❌ Chat error after ${elapsedTime}ms:`, error.message);
+    
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: error.message.includes('timeout') 
+          ? 'Request took too long. Please try a shorter question.' 
+          : 'Failed to generate response: ' + error.message 
+      });
+    }
   }
 });
 

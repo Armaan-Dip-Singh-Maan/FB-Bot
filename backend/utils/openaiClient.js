@@ -15,6 +15,7 @@ async function generateEmbedding(text) {
     const response = await openai.embeddings.create({
       model: process.env.EMBEDDING_MODEL || 'text-embedding-3-small',
       input: text,
+      timeout: 10000, // 10 second timeout
     });
 
     return response.data[0].embedding;
@@ -90,7 +91,7 @@ CRITICAL RESPONSE RULES:
 ${context}`;
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-3.5-turbo', // Faster model for quicker responses
       messages: [
         {
           role: 'system',
@@ -102,7 +103,8 @@ ${context}`;
         }
       ],
       max_tokens: 50, // Drastically reduced to enforce 30-word limit
-      temperature: 0.7
+      temperature: 0.7,
+      timeout: 15000 // 15 second timeout
     });
 
     const responseText = response.choices[0].message.content;

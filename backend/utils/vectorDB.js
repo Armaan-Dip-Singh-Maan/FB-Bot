@@ -46,16 +46,28 @@ class VectorDB {
       return [];
     }
 
-    // Calculate cosine similarity for each document
-    const similarities = this.documents.map(doc => ({
-      ...doc,
-      similarity: this.cosineSimilarity(queryEmbedding, doc.embedding)
-    }));
+    // Optimized: Use partial sort - only keep top K during calculation
+    // This avoids sorting all documents when we only need top K
+    const topResults = [];
+    
+    for (const doc of this.documents) {
+      const similarity = this.cosineSimilarity(queryEmbedding, doc.embedding);
+      
+      // Insert in sorted order (only keep top K)
+      const result = { ...doc, similarity };
+      
+      if (topResults.length < topK) {
+        // Insert and keep sorted
+        topResults.push(result);
+        topResults.sort((a, b) => b.similarity - a.similarity);
+      } else if (similarity > topResults[topResults.length - 1].similarity) {
+        // Replace the lowest if this is better
+        topResults[topResults.length - 1] = result;
+        topResults.sort((a, b) => b.similarity - a.similarity);
+      }
+    }
 
-    // Sort by similarity and return top K
-    return similarities
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, topK);
+    return topResults;
   }
 
   /**
