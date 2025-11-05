@@ -173,9 +173,13 @@ function closeDisclaimer() {
 }
 
 function closeChat() {
-    // Show email modal before closing if user has engaged
-    if (sessionId && messageCount > 0 && !userEmail) {
-        // Don't close yet, show email modal first
+    // Always show email modal before closing if user hasn't provided email
+    if (!userEmail) {
+        // Ensure session is initialized
+        if (!sessionId) {
+            initializeSession();
+        }
+        // Show email modal first
         showEmailModal();
         return;
     }
@@ -473,13 +477,18 @@ async function handleScheduleCall() {
 
 async function showAvailableTimeSlots() {
     try {
+        // Show typing indicator
+        typingIndicator.classList.remove('hidden');
+        
         // Fetch available time slots from backend
         const response = await fetch(`${RAG_BACKEND_URL}/api/calendly/availability`);
         const data = await response.json();
         
+        typingIndicator.classList.add('hidden');
+        
         if (data.success && data.slots && data.slots.length > 0) {
-            // Format slots as quick reply buttons
-            const timeOptions = data.slots.map(slot => `${slot.date} at ${slot.time}`);
+            // Format slots with better display
+            const timeOptions = data.slots.map(slot => `📅 ${slot.date} at ${slot.time}`);
             
             addMessageWithQuickReplies(
                 "Perfect! Here are some available times for your call with our founder. Which works best for you? 📅",
@@ -495,14 +504,18 @@ async function showAvailableTimeSlots() {
             addMessageToUI("Let me check available times for you. Please visit our Calendly page to book: " + CALENDLY_URL, 'bot');
         }
     } catch (error) {
+        typingIndicator.classList.add('hidden');
         console.error('Error fetching time slots:', error);
         addMessageToUI("I'm having trouble fetching available times. Please visit: " + CALENDLY_URL, 'bot');
     }
 }
 
 async function handleTimeSlotSelection(selectedText, slots) {
-    // Find the selected slot
-    const selectedSlot = slots.find(slot => `${slot.date} at ${slot.time}` === selectedText);
+    // Remove emoji prefix if present for matching
+    const cleanText = selectedText.replace(/^📅\s*/, '');
+    
+    // Find the selected slot (try both with and without emoji)
+    let selectedSlot = slots.find(slot => `${slot.date} at ${slot.time}` === cleanText || `${slot.date} at ${slot.time}` === selectedText);
     
     if (!selectedSlot) {
         addMessageToUI("Sorry, I couldn't find that time slot. Please try again.", 'bot');
@@ -525,9 +538,13 @@ async function handleTimeSlotSelection(selectedText, slots) {
         const data = await response.json();
         
         if (data.success) {
-            addMessageToUI(selectedText, 'user');
+            // Show user's selection
+            addMessageToUI(cleanText, 'user');
+            
+            // Show confirmation with better formatting
             setTimeout(() => {
-                addMessageToUI(data.message + " 🎉", 'bot');
+                const confirmationMessage = `✅ ${data.message}\n\n📧 You'll receive a confirmation email shortly with all the details.\n\nLooking forward to our call! 🎉`;
+                addMessageToUI(confirmationMessage, 'bot');
                 calendlySuggested = true;
                 
                 // Track meeting booking
@@ -966,9 +983,26 @@ function addMessageWithQuickReplies(text, quickReplies, numbered = false, slotDa
         const quickRepliesDiv = document.createElement('div');
         quickRepliesDiv.className = 'quick-replies';
         
+        // Check if these are time slots (if slotData is provided)
+        const isTimeSlot = slotData !== null && slotData.length > 0;
+        
         quickReplies.forEach((reply, index) => {
             const button = document.createElement('button');
             button.className = 'quick-reply-btn';
+            if (isTimeSlot) {
+                button.classList.add('time-slot-btn');
+            }
+            // Special styling for Schedule Discovery Call button
+            if (reply === 'Schedule Discovery Call') {
+                button.classList.add('schedule-call-btn');
+                button.style.background = 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)';
+                button.style.color = 'white';
+                button.style.borderColor = '#1d4ed8';
+                button.style.fontWeight = '600';
+                button.style.padding = '14px 20px';
+                button.style.fontSize = '15px';
+                button.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.3)';
+            }
             button.textContent = numbered ? `${index + 1}: ${reply}` : reply;
             button.onclick = () => handleQuickReply(reply);
             quickRepliesDiv.appendChild(button);
