@@ -900,7 +900,7 @@ function addMessageToUI(text, sender, options = {}) {
     avatarDiv.className = 'avatar';
     if (sender === 'bot') {
         const logoImg = document.createElement('img');
-        logoImg.src = 'assets/images/franquicia-boost-logo.png';
+        logoImg.src = 'assets/images/Logo.png';
         logoImg.alt = 'Franquicia Boost';
         logoImg.className = 'avatar-img';
         logoImg.onerror = function() {
@@ -935,7 +935,7 @@ function addMessageWithQuickReplies(text, quickReplies, numbered = false, slotDa
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'avatar';
     const logoImg = document.createElement('img');
-    logoImg.src = 'assets/images/franquicia-boost-logo.png';
+    logoImg.src = 'assets/images/Logo.png';
     logoImg.alt = 'Franquicia Boost';
     logoImg.className = 'avatar-img';
     logoImg.onerror = function() {
