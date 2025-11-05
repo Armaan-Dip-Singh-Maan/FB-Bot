@@ -5,12 +5,8 @@ const RAG_BACKEND_URL = 'http://localhost:3001';
 const API_URL = `${RAG_BACKEND_URL}/api/chat`;
 
 // WhatsApp Configuration
-// Replace with your WhatsApp number (format: country code + number, no + or spaces)
-// Example: '1234567890' for US number (123) 456-7890
-// WhatsApp number: Remove all non-numeric characters for wa.me URL
-// Format: country code + number (e.g., '13683999991' for +1(368)399-9991)
-const WHATSAPP_NUMBER = '13683999991'; // Extracted from +1(368)399-9991
-const WHATSAPP_MESSAGE = 'Hello! I\'d like to learn more about Franquicia Boost.'; // Default message
+const WHATSAPP_NUMBER = '13683999991';
+const WHATSAPP_MESSAGE = 'Hello! I\'d like to learn more about Franquicia Boost.';
 
 // Calendly Configuration
 const CALENDLY_URL = 'https://calendly.com/franquiciaboost';
@@ -28,6 +24,33 @@ let sessionId = null;
 let userEmail = null;
 let disclaimerAccepted = false;
 
+// Questionnaire state
+let questionnaireState = {
+    active: false,
+    currentStep: null,
+    answers: {},
+    franchiseMatch: null,
+    askedAboutMeeting: false,
+    meetingAccepted: false,
+    meetingDeclined: false,
+    completed: false
+};
+
+// Filter state
+let filterState = {
+    industry: null,
+    priceRange: null,
+    location: null
+};
+
+// Conversation context summary (to help maintain context)
+let conversationContext = {
+    franchiseType: null,
+    location: null,
+    budget: null,
+    interests: []
+};
+
 // ============================================
 // DOM ELEMENTS
 // ============================================
@@ -39,12 +62,10 @@ const userInput = document.getElementById('user-input');
 const sendBtn = document.getElementById('send-btn');
 const typingIndicator = document.getElementById('typing-indicator');
 const whatsappWidget = document.getElementById('whatsapp-widget');
-const whatsappWidgetSide = document.getElementById('whatsapp-widget-side');
 const calendlyOverlay = document.getElementById('calendly-overlay');
 const closeCalendlyBtn = document.getElementById('close-calendly');
 const disclaimerBanner = document.getElementById('disclaimer-banner');
 const closeDisclaimerBtn = document.getElementById('close-disclaimer');
-const feedbackBtn = document.getElementById('feedback-btn');
 const emailModal = document.getElementById('email-modal');
 const closeEmailModalBtn = document.getElementById('close-email-modal');
 const skipEmailBtn = document.getElementById('skip-email');
@@ -61,15 +82,9 @@ chatbotToggle.addEventListener('click', openChat);
 closeBtn.addEventListener('click', closeChat);
 sendBtn.addEventListener('click', handleSendMessage);
 whatsappWidget.addEventListener('click', handleWhatsAppClick);
-if (whatsappWidgetSide) {
-    whatsappWidgetSide.addEventListener('click', handleWhatsAppClick);
-}
 closeCalendlyBtn.addEventListener('click', closeCalendlyWidget);
 if (closeDisclaimerBtn) {
     closeDisclaimerBtn.addEventListener('click', closeDisclaimer);
-}
-if (feedbackBtn) {
-    feedbackBtn.addEventListener('click', showEmailModal);
 }
 if (closeEmailModalBtn) {
     closeEmailModalBtn.addEventListener('click', closeEmailModal);
@@ -88,7 +103,6 @@ if (closeThankyouBtn) {
         closeChat();
     });
 }
-// Allow Enter key to submit email
 if (userEmailInput) {
     userEmailInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
@@ -103,7 +117,6 @@ userInput.addEventListener('keypress', (e) => {
     }
 });
 
-// Close Calendly on overlay click
 if (calendlyOverlay) {
     calendlyOverlay.addEventListener('click', (e) => {
         if (e.target === calendlyOverlay) {
@@ -130,7 +143,7 @@ async function initializeSession() {
             await fetch(`${RAG_BACKEND_URL}/api/metrics/track-visitor`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId, email: userEmail })
+                body: JSON.stringify({ sessionId })
             });
         } catch (error) {
             console.error('Error tracking visitor:', error);
@@ -142,33 +155,37 @@ function openChat() {
     chatbotContainer.classList.remove('hidden');
     chatbotToggle.classList.add('hidden');
     
-    // Always show disclaimer banner (removed sessionStorage check - shows every time)
+    // Always show disclaimer banner
     disclaimerAccepted = false;
     if (disclaimerBanner) {
         disclaimerBanner.classList.remove('hidden');
     }
     
-    // Initialize session tracking
     initializeSession();
-    
     userInput.focus();
 }
 
 function closeDisclaimer() {
     disclaimerAccepted = true;
-    // No persistence - disclaimer will show again on next page refresh
     if (disclaimerBanner) {
         disclaimerBanner.classList.add('hidden');
     }
 }
 
 function closeChat() {
-    // Track drop-off before closing
-    if (sessionId) {
+    // Show email modal before closing if user has engaged
+    if (sessionId && messageCount > 0 && !userEmail) {
+        // Don't close yet, show email modal first
+        showEmailModal();
+        return;
+    }
+    
+    // Track drop-off if session exists
+    if (sessionId && messageCount > 0) {
         fetch(`${RAG_BACKEND_URL}/api/metrics/track-dropoff`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, messageCount })
+            body: JSON.stringify({ sessionId })
         }).catch(err => console.error('Error tracking drop-off:', err));
     }
     
@@ -189,7 +206,6 @@ function closeEmailModal() {
 }
 
 function skipEmail() {
-    // Mark as unknown user
     if (sessionId) {
         fetch(`${RAG_BACKEND_URL}/api/metrics/update-email`, {
             method: 'POST',
@@ -198,7 +214,9 @@ function skipEmail() {
         }).catch(err => console.error('Error updating email:', err));
     }
     closeEmailModal();
-    closeChat();
+    // Actually close the chat now
+    chatbotContainer.classList.add('hidden');
+    chatbotToggle.classList.remove('hidden');
 }
 
 async function submitEmail() {
@@ -206,13 +224,11 @@ async function submitEmail() {
     if (email && isValidEmail(email)) {
         userEmail = email;
         
-        // Show loading state
         if (submitEmailBtn) {
             submitEmailBtn.disabled = true;
             submitEmailBtn.innerHTML = '<span class="btn-text">Submitting...</span>';
         }
         
-        // Update email in backend
         if (sessionId) {
             try {
                 await fetch(`${RAG_BACKEND_URL}/api/metrics/update-email`, {
@@ -225,17 +241,14 @@ async function submitEmail() {
             }
         }
         
-        // Hide email modal and show thank you
         if (emailModal) {
             emailModal.classList.add('hidden');
         }
         
-        // Show thank you modal
         if (thankyouModal) {
             thankyouModal.classList.remove('hidden');
         }
         
-        // Close chat after a moment
         setTimeout(() => {
             if (thankyouModal) {
                 thankyouModal.classList.add('hidden');
@@ -243,7 +256,6 @@ async function submitEmail() {
             closeChat();
         }, 3000);
     } else {
-        // Show error
         if (userEmailInput) {
             userEmailInput.classList.add('error');
             userEmailInput.placeholder = 'Please enter a valid email address';
@@ -259,13 +271,413 @@ function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// Update conversation context from user messages
+function updateConversationContext(message) {
+    const lowerMessage = message.toLowerCase();
+    
+    // Extract franchise type
+    const franchiseTypes = ['pizza', 'restaurant', 'food', 'retail', 'coffee', 'cafe', 'fitness', 'gym', 'education', 'home services', 'cleaning'];
+    for (const type of franchiseTypes) {
+        if (lowerMessage.includes(type)) {
+            conversationContext.franchiseType = type;
+            break;
+        }
+    }
+    
+    // Extract location (simple patterns - including NW, NE, SW, SE prefixes)
+    const locationPatterns = [
+        /(?:in|at|near|around|looking\s+for|some\s+place)\s+([a-z\s]*(?:nw|ne|sw|se|north\s+west|north\s+east|south\s+west|south\s+east|north|south|east|west)?\s*(?:calgary|toronto|vancouver|montreal|edmonton|winnipeg|ottawa|halifax|victoria|saskatoon|regina|kelowna|hamilton|london|kitchener|windsor|sherbrooke|st\.?\s*catharines|oshawa|barrie|abbotsford|sudbury|kingston|saguenay|trois-rivières|guelph|cambridge|brantford|saint-john|thunder-bay|chilliwack|red-deer|kamloops|saint-john|nanaimo|sarnia|belleville|fredericton|charlottetown|grande-prairie|caledon|saint-jérôme|airdrie|lethbridge|markham|richmond-hill|vaughan|burlington|milton|pickering|ajax|whitby|oakville|mississauga|brampton|etobicoke|scarborough|north-york|downtown))/i,
+        /([a-z\s]*(?:nw|ne|sw|se)\s*(?:calgary|toronto|vancouver|montreal|edmonton|winnipeg|ottawa))/i,
+        /([a-z\s]+(?:calgary|toronto|vancouver|montreal|edmonton|winnipeg|ottawa))/i
+    ];
+    
+    for (const pattern of locationPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1]) {
+            conversationContext.location = match[1].trim();
+            break;
+        }
+    }
+    
+    // Extract budget/investment (improved patterns)
+    const budgetPatterns = [
+        /\$?\s*(\d+)\s*(?:mil|million|m)/i,
+        /\$?\s*(\d+)\s*(?:k|thousand|k)/i,
+        /(?:have|got|budget|investment|cost|price)\s*(?:of|is|around|about)?\s*\$?\s*(\d+)/i,
+        /(\d+)\s*(?:mil|million|m)\s*(?:budget|investment|dollars)?/i,
+        /(\d+)\s*(?:k|thousand)\s*(?:budget|investment|dollars)?/i
+    ];
+    
+    for (const pattern of budgetPatterns) {
+        const match = message.match(pattern);
+        if (match && match[1]) {
+            const amount = parseInt(match[1]);
+            if (amount >= 1000) {
+                // Format the budget nicely
+                if (message.toLowerCase().includes('mil') || message.toLowerCase().includes('million') || message.toLowerCase().includes(' m')) {
+                    conversationContext.budget = `$${amount} million`;
+                } else if (amount >= 1000) {
+                    conversationContext.budget = `$${amount}K`;
+                } else {
+                    conversationContext.budget = `$${amount}`;
+                }
+                break;
+            }
+        }
+    }
+}
+
+// ============================================
+// QUESTIONNAIRE SYSTEM
+// ============================================
+
+function askAboutFounderMeeting() {
+    questionnaireState.askedAboutMeeting = true;
+    addMessageWithQuickReplies(
+        "Great! I see you're interested in franchise opportunities. Would you like to schedule a meeting with our founder to discuss your options? This is a great way to get personalized guidance! 🤝",
+        ['Yes, I\'d like to meet', 'No, continue chatting']
+    );
+}
+
+function handleFounderMeetingResponse(response) {
+    if (response === 'Yes, I\'d like to meet') {
+        questionnaireState.meetingAccepted = true;
+        addMessageToUI(response, 'user');
+        setTimeout(() => {
+            startQuestionnaire();
+        }, 800);
+    } else {
+        // User said no, continue normal chat
+        questionnaireState.meetingDeclined = true;
+        addMessageToUI(response, 'user');
+        setTimeout(() => {
+            addMessageToUI("No problem! I'm here to help answer any questions you have. What would you like to know about franchise opportunities? 😊", 'bot');
+        }, 500);
+    }
+}
+
+const QUALIFYING_QUESTIONS = [
+    {
+        id: 'exploration_time',
+        question: "First, have you been exploring franchise opportunities for a while, or is this fairly new?",
+        type: 'quick_reply',
+        options: ['Just started', 'Few weeks/months', 'Actively researching 6+ months']
+    },
+    {
+        id: 'timeline',
+        question: "Perfect timing! What's your desired timeline for opening a franchise?",
+        type: 'quick_reply',
+        options: ['Within 3 months', '3-6 months', '6-12 months', 'Still exploring']
+    },
+    {
+        id: 'capital',
+        question: "Great, that aligns well with typical franchise onboarding. Do you have access to the liquid capital needed ($150K+) to invest in this opportunity?",
+        type: 'quick_reply',
+        options: ['Yes, ready now', 'Yes, but need to arrange', 'Not quite there yet']
+    },
+    {
+        id: 'decision_maker',
+        question: "Fantastic! And are you the primary decision-maker for this investment, or will others be involved?",
+        type: 'quick_reply',
+        options: ['Just me', 'Me + partner/spouse', 'Family decision', 'Business partners']
+    },
+    {
+        id: 'attraction',
+        question: "Wonderful! One last question: What attracted you most to Pizza Franchise X?",
+        type: 'text_input'
+    }
+];
+
+function startQuestionnaire() {
+    questionnaireState.active = true;
+    questionnaireState.currentStep = 0;
+    questionnaireState.answers = {};
+    
+    addMessageWithQuickReplies(
+        "Excellent! Before we schedule your call with the franchisor, I'd like to ask a few quick questions to make sure we maximize your time together. This will only take a minute! 😊",
+        []
+    );
+    
+    setTimeout(() => {
+        askNextQuestion();
+    }, 1500);
+}
+
+function askNextQuestion() {
+    if (questionnaireState.currentStep >= QUALIFYING_QUESTIONS.length) {
+        completeQuestionnaire();
+        return;
+    }
+    
+    const question = QUALIFYING_QUESTIONS[questionnaireState.currentStep];
+    
+    if (question.type === 'quick_reply') {
+        addMessageWithQuickReplies(question.question, question.options);
+    } else {
+        addMessageToUI(question.question, 'bot');
+    }
+}
+
+function handleQuestionnaireAnswer(answer) {
+    const question = QUALIFYING_QUESTIONS[questionnaireState.currentStep];
+    questionnaireState.answers[question.id] = answer;
+    
+    // Add user's answer to chat
+    addMessageToUI(answer, 'user');
+    
+    // Move to next question
+    questionnaireState.currentStep++;
+    
+    setTimeout(() => {
+        askNextQuestion();
+    }, 800);
+}
+
+function completeQuestionnaire() {
+    questionnaireState.active = false;
+    
+    // Save questionnaire answers to backend
+    if (sessionId && questionnaireState.answers) {
+        fetch(`${RAG_BACKEND_URL}/api/metrics/save-questionnaire`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                sessionId, 
+                answers: questionnaireState.answers 
+            })
+        }).catch(err => console.error('Error saving questionnaire:', err));
+    }
+    
+    // Show meeting message with franchise match
+    const franchiseMatch = filterState.franchiseMatch || 'Pizza Franchise X';
+    const meetingMessage = `Perfect! Based on what you've shared, I think you'd be a great fit for ${franchiseMatch}. Let me connect you with their development team for a discovery call! 📞\n\nI can help you book a 30-minute consultation with Sana, their Franchise Development Manager. She'll walk you through:\n\n✓ Detailed financial projections\n\n✓ Available territories in your area\n\n✓ The complete onboarding process\n\n✓ Answer all your questions`;
+    
+    setTimeout(() => {
+        addMessageWithQuickReplies(meetingMessage, ['Schedule Discovery Call']);
+        // Mark that questionnaire is complete so clicking the button opens Calendly
+        questionnaireState.completed = true;
+    }, 500);
+}
+
+async function handleScheduleCall() {
+    // User clicked "Schedule Discovery Call"
+    // Check if questionnaire is completed
+    if (questionnaireState.completed || questionnaireState.currentStep >= QUALIFYING_QUESTIONS.length) {
+        // Questionnaire is complete, fetch available dates/times
+        await showAvailableTimeSlots();
+    } else if (!questionnaireState.active) {
+        // Start questionnaire if not already started
+        startQuestionnaire();
+    }
+}
+
+async function showAvailableTimeSlots() {
+    try {
+        // Fetch available time slots from backend
+        const response = await fetch(`${RAG_BACKEND_URL}/api/calendly/availability`);
+        const data = await response.json();
+        
+        if (data.success && data.slots && data.slots.length > 0) {
+            // Format slots as quick reply buttons
+            const timeOptions = data.slots.map(slot => `${slot.date} at ${slot.time}`);
+            
+            addMessageWithQuickReplies(
+                "Perfect! Here are some available times for your call with our founder. Which works best for you? 📅",
+                timeOptions,
+                false,
+                data.slots // Pass full slot data for booking
+            );
+            
+            // Store slots for booking
+            window.currentTimeSlots = data.slots;
+        } else {
+            // Fallback if no slots available
+            addMessageToUI("Let me check available times for you. Please visit our Calendly page to book: " + CALENDLY_URL, 'bot');
+        }
+    } catch (error) {
+        console.error('Error fetching time slots:', error);
+        addMessageToUI("I'm having trouble fetching available times. Please visit: " + CALENDLY_URL, 'bot');
+    }
+}
+
+async function handleTimeSlotSelection(selectedText, slots) {
+    // Find the selected slot
+    const selectedSlot = slots.find(slot => `${slot.date} at ${slot.time}` === selectedText);
+    
+    if (!selectedSlot) {
+        addMessageToUI("Sorry, I couldn't find that time slot. Please try again.", 'bot');
+        return;
+    }
+    
+    // Book the selected time slot
+    try {
+        const response = await fetch(`${RAG_BACKEND_URL}/api/calendly/book`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                sessionId: sessionId,
+                slot: selectedSlot,
+                email: userEmail,
+                name: userEmail ? userEmail.split('@')[0] : 'Guest'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            addMessageToUI(selectedText, 'user');
+            setTimeout(() => {
+                addMessageToUI(data.message + " 🎉", 'bot');
+                calendlySuggested = true;
+                
+                // Track meeting booking
+                if (sessionId) {
+                    fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sessionId })
+                    }).catch(err => console.error('Error tracking meeting:', err));
+                }
+            }, 500);
+        } else {
+            addMessageToUI("Sorry, there was an error booking that time. Please try again or visit: " + CALENDLY_URL, 'bot');
+        }
+    } catch (error) {
+        console.error('Error booking time slot:', error);
+        addMessageToUI("Sorry, there was an error. Please visit: " + CALENDLY_URL, 'bot');
+    }
+}
+
+// ============================================
+// FILTERING SYSTEM
+// ============================================
+
+function showFilterOptions() {
+    const filterMessage = "Would you like to:";
+    const options = [
+        'Refine these results',
+        'See franchises in different price ranges',
+        'Explore other industries',
+        'Learn more about a specific franchise'
+    ];
+    
+    addMessageWithQuickReplies(filterMessage, options);
+}
+
+function handleFilterOption(option) {
+    if (option === 'Refine these results') {
+        showProgressiveFiltering();
+    } else if (option === 'See franchises in different price ranges') {
+        showPriceRangeFilter();
+    } else if (option === 'Explore other industries') {
+        showIndustryFilter();
+    } else if (option === 'Learn more about a specific franchise') {
+        addMessageToUI("Which franchise would you like to learn more about? Just type the name!", 'bot');
+    }
+}
+
+function showProgressiveFiltering() {
+    addMessageToUI("Great! Let's explore by industry. Which industry interests you most?", 'bot');
+    
+    const industries = ['Food & Beverage', 'Retail', 'Home Services', 'Fitness & Health', 'Education', 'Other'];
+    setTimeout(() => {
+        addMessageWithQuickReplies("", industries, true);
+    }, 500);
+}
+
+function handleIndustrySelection(industry) {
+    filterState.industry = industry;
+    addMessageToUI(industry, 'user');
+    
+    setTimeout(() => {
+        addMessageToUI("Excellent choice! What's your investment range?", 'bot');
+        const priceRanges = ['Under $50K', '$50K-$150K', '$150K-$300K', '$300K+', 'Not sure yet'];
+        setTimeout(() => {
+            addMessageWithQuickReplies("", priceRanges, true);
+        }, 500);
+    }, 800);
+}
+
+function handlePriceRangeSelection(priceRange) {
+    filterState.priceRange = priceRange;
+    addMessageToUI(priceRange, 'user');
+    
+    setTimeout(() => {
+        addMessageToUI("Perfect. Where are you looking to open?", 'bot');
+        // This will be handled as a text input
+    }, 800);
+}
+
+function handleLocationInput(location) {
+    filterState.location = location;
+    
+    // Simulate finding matches (in real app, this would query the backend)
+    setTimeout(() => {
+        const matches = getFilteredFranchises();
+        if (matches.length > 0) {
+            filterState.franchiseMatch = matches[0].name;
+            addMessageToUI(`Based on your preferences (${filterState.industry}, ${filterState.priceRange}, ${location}), I found some great matches! Would you like to schedule a discovery call?`, 'bot');
+            setTimeout(() => {
+                addMessageWithQuickReplies("", ['Schedule Discovery Call'], true);
+            }, 500);
+        } else {
+            addMessageToUI("I couldn't find exact matches for your criteria. Would you like to refine your search?", 'bot');
+            setTimeout(() => {
+                showFilterOptions();
+            }, 500);
+        }
+    }, 1000);
+}
+
+function getFilteredFranchises() {
+    // This would normally query the backend
+    // For now, return a mock match
+    return [{ name: 'Pizza Franchise X', industry: filterState.industry, priceRange: filterState.priceRange }];
+}
+
+function showIndustryFilter() {
+    const industries = ['Food & Beverage', 'Retail', 'Home Services', 'Fitness & Health', 'Education', 'Other'];
+    addMessageToUI("Which industry interests you?", 'bot');
+    setTimeout(() => {
+        addMessageWithQuickReplies("", industries, true);
+    }, 500);
+}
+
+function showPriceRangeFilter() {
+    const priceRanges = ['Under $50K', '$50K-$150K', '$150K-$300K', '$300K+', 'Not sure yet'];
+    addMessageToUI("What's your investment range?", 'bot');
+    setTimeout(() => {
+        addMessageWithQuickReplies("", priceRanges, true);
+    }, 500);
+}
+
+// ============================================
+// MESSAGE HANDLING
+// ============================================
+
 async function handleSendMessage() {
     const message = userInput.value.trim();
     
-    // Validation
     if (!message || isProcessing) return;
     
-    // Clear input and disable button immediately (don't wait for backend check)
+    // Check if we're in questionnaire mode and expecting text input
+    if (questionnaireState.active && questionnaireState.currentStep < QUALIFYING_QUESTIONS.length) {
+        const question = QUALIFYING_QUESTIONS[questionnaireState.currentStep];
+        if (question.type === 'text_input') {
+            handleQuestionnaireAnswer(message);
+            userInput.value = '';
+            return;
+        }
+    }
+    
+    // Check if we're expecting location input
+    if (filterState.priceRange && !filterState.location) {
+        handleLocationInput(message);
+        userInput.value = '';
+        return;
+    }
+    
+    // Clear input and disable button
     userInput.value = '';
     isProcessing = true;
     sendBtn.disabled = true;
@@ -273,28 +685,30 @@ async function handleSendMessage() {
     // Add user message to UI
     addMessageToUI(message, 'user');
     
-    // Increment message count
     messageCount++;
     
-    // Add to conversation history
     conversationHistory.push({
         role: 'user',
         content: message
     });
     
-    // Show typing indicator
     typingIndicator.classList.remove('hidden');
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     try {
-        // Prepare session data for qualification tracking
+        // Update conversation context from current message
+        updateConversationContext(message);
+        
         const sessionData = {
             messageCount: messageCount,
             qualificationScore: qualificationScore,
-            calendlySuggested: calendlySuggested
+            calendlySuggested: calendlySuggested,
+            filters: filterState,
+            questionnaireAnswers: questionnaireState.answers,
+            conversationHistory: conversationHistory,
+            conversationContext: conversationContext
         };
         
-        // Track engagement on first message
         if (messageCount === 1 && sessionId) {
             fetch(`${RAG_BACKEND_URL}/api/metrics/track-engagement`, {
                 method: 'POST',
@@ -303,13 +717,10 @@ async function handleSendMessage() {
             }).catch(err => console.error('Error tracking engagement:', err));
         }
         
-        // Call RAG Backend API with session data
         const response = await callRAGBackend(message, sessionData);
         
-        // Hide typing indicator
         typingIndicator.classList.add('hidden');
         
-        // Track message
         if (sessionId) {
             fetch(`${RAG_BACKEND_URL}/api/metrics/track-message`, {
                 method: 'POST',
@@ -322,13 +733,11 @@ async function handleSendMessage() {
             }).catch(err => console.error('Error tracking message:', err));
         }
         
-        // Update qualification score
         if (response.qualificationScore !== undefined) {
             const previousScore = qualificationScore;
             qualificationScore = response.qualificationScore;
             qualificationStatus = response.qualificationStatus || 'browsing';
             
-            // Track qualification
             if (qualificationScore >= 50 && previousScore < 50 && sessionId) {
                 fetch(`${RAG_BACKEND_URL}/api/metrics/track-qualification`, {
                     method: 'POST',
@@ -337,72 +746,74 @@ async function handleSendMessage() {
                 }).catch(err => console.error('Error tracking qualification:', err));
             }
             
-            // Log qualification progress (only if points were added)
             if (response.pointsAdded > 0) {
                 console.log(`📊 Qualification: ${qualificationScore} points (${qualificationStatus})`);
             }
         }
         
-        // Add bot response to UI
-        addMessageToUI(response.response, 'bot');
+        // Update filter state from backend response
+        if (response.filters) {
+            filterState = { ...filterState, ...response.filters };
+            
+            // Update conversation context from filters
+            if (response.filters.industry) {
+                conversationContext.franchiseType = response.filters.industry.toLowerCase();
+            }
+            if (response.filters.location) {
+                conversationContext.location = response.filters.location;
+            }
+            if (response.filters.priceRange) {
+                conversationContext.budget = response.filters.priceRange;
+            }
+        }
         
-        // Check if lead just became qualified
+        // Add bot response to UI
+        if (response.quickReplies) {
+            addMessageWithQuickReplies(response.response, response.quickReplies);
+        } else {
+            addMessageToUI(response.response, 'bot');
+        }
+        
+        // Add bot response to conversation history for context (avoid duplicates)
+        const lastBotMessage = conversationHistory.filter(msg => msg.role === 'assistant').pop();
+        if (!lastBotMessage || lastBotMessage.content !== response.response) {
+            conversationHistory.push({
+                role: 'assistant',
+                content: response.response
+            });
+        }
+        
         const previousScore = qualificationScore - (response.pointsAdded || 0);
         const justQualified = previousScore < 50 && qualificationScore >= 50;
         
-        // Only suggest Calendly if lead is qualified AND not already suggested
-        // Also check if user explicitly asks for meeting
         const userAskedForMeeting = checkForMeetingKeywords(message);
         
-        if (userAskedForMeeting) {
-            // User explicitly asked - always show
-            openCalendlyWidget();
-            calendlySuggested = true;
-            
-            // Track meeting booking
-            if (sessionId) {
-                fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ sessionId })
-                }).catch(err => console.error('Error tracking meeting:', err));
-            }
-        } else if (response.suggestCalendly || justQualified) {
-            // Lead just qualified OR is qualified and AI suggests meeting
-            // Add a friendly message before showing Calendly
-            if (justQualified && !calendlySuggested) {
-                setTimeout(() => {
-                    addMessageToUI('🎉 Great! You\'re ready to take the next step. Let\'s schedule a meeting!', 'bot');
-                    setTimeout(() => {
-                        openCalendlyWidget();
-                        calendlySuggested = true;
-                    }, 500);
-                }, 300);
-            } else if (response.suggestCalendly && !calendlySuggested) {
-                openCalendlyWidget();
-                calendlySuggested = true;
-                
-                // Track meeting booking
-                if (sessionId) {
-                    fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sessionId })
-                    }).catch(err => console.error('Error tracking meeting:', err));
+        // If user just qualified, ask if they want to meet with founder first
+        if (justQualified && !calendlySuggested && !questionnaireState.active && !questionnaireState.askedAboutMeeting) {
+            setTimeout(() => {
+                askAboutFounderMeeting();
+            }, 500);
+        } else if (userAskedForMeeting) {
+            // User explicitly asked for meeting
+            if (!questionnaireState.active && !questionnaireState.askedAboutMeeting) {
+                askAboutFounderMeeting();
+            } else if (questionnaireState.meetingAccepted) {
+                if (!questionnaireState.active) {
+                    startQuestionnaire();
                 }
             }
         }
         
-        // Add to conversation history
-        conversationHistory.push({
-            role: 'assistant',
-            content: response.response
-        });
+        // Check if response suggests filtering
+        if (response.suggestFilters) {
+            setTimeout(() => {
+                showFilterOptions();
+            }, 1000);
+        }
         
     } catch (error) {
         typingIndicator.classList.add('hidden');
         
-        // Better error messages
         let errorMessage = 'Sorry, something went wrong. ';
         
         if (error.message.includes('401')) {
@@ -426,9 +837,8 @@ async function handleSendMessage() {
 
 async function callRAGBackend(message, sessionData = {}) {
     try {
-        // Create AbortController for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
         
         try {
             const response = await fetch(API_URL, {
@@ -445,7 +855,6 @@ async function callRAGBackend(message, sessionData = {}) {
             
             clearTimeout(timeoutId);
             
-            // Check if response is ok
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
                 throw new Error(`Backend Error ${response.status}: ${errorData.error || response.statusText}`);
@@ -483,14 +892,26 @@ async function checkBackendStatus() {
 }
 
 
-function addMessageToUI(text, sender) {
+function addMessageToUI(text, sender, options = {}) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${sender}-message`;
     
     const avatarDiv = document.createElement('div');
     avatarDiv.className = 'avatar';
     if (sender === 'bot') {
-        avatarDiv.textContent = '🤖';
+        const logoImg = document.createElement('img');
+        logoImg.src = 'assets/images/franquicia-boost-logo.png';
+        logoImg.alt = 'Franquicia Boost';
+        logoImg.className = 'avatar-img';
+        logoImg.onerror = function() {
+            this.style.display = 'none';
+            const fallback = document.createElement('span');
+            fallback.className = 'avatar-fallback';
+            fallback.textContent = '🤖';
+            fallback.style.display = 'block';
+            avatarDiv.appendChild(fallback);
+        };
+        avatarDiv.appendChild(logoImg);
     }
     
     const bubbleDiv = document.createElement('div');
@@ -505,6 +926,120 @@ function addMessageToUI(text, sender) {
     
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addMessageWithQuickReplies(text, quickReplies, numbered = false, slotData = null) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message bot-message';
+    
+    const avatarDiv = document.createElement('div');
+    avatarDiv.className = 'avatar';
+    const logoImg = document.createElement('img');
+    logoImg.src = 'assets/images/franquicia-boost-logo.png';
+    logoImg.alt = 'Franquicia Boost';
+    logoImg.className = 'avatar-img';
+    logoImg.onerror = function() {
+        this.style.display = 'none';
+        const fallback = document.createElement('span');
+        fallback.className = 'avatar-fallback';
+        fallback.textContent = '🤖';
+        fallback.style.display = 'block';
+        avatarDiv.appendChild(fallback);
+    };
+    avatarDiv.appendChild(logoImg);
+    
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.className = 'bubble';
+    
+    if (text) {
+        const textP = document.createElement('div');
+        textP.innerHTML = text.replace(/\n/g, '<br>');
+        bubbleDiv.appendChild(textP);
+    }
+    
+    // Store slot data if provided (for time slot selection)
+    if (slotData) {
+        messageDiv.setAttribute('data-slots', JSON.stringify(slotData));
+    }
+    
+    if (quickReplies && quickReplies.length > 0) {
+        const quickRepliesDiv = document.createElement('div');
+        quickRepliesDiv.className = 'quick-replies';
+        
+        quickReplies.forEach((reply, index) => {
+            const button = document.createElement('button');
+            button.className = 'quick-reply-btn';
+            button.textContent = numbered ? `${index + 1}: ${reply}` : reply;
+            button.onclick = () => handleQuickReply(reply);
+            quickRepliesDiv.appendChild(button);
+        });
+        
+        bubbleDiv.appendChild(quickRepliesDiv);
+    }
+    
+    messageDiv.appendChild(avatarDiv);
+    messageDiv.appendChild(bubbleDiv);
+    
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function handleQuickReply(reply) {
+    // Check if asked about founder meeting
+    if (questionnaireState.askedAboutMeeting && !questionnaireState.meetingAccepted && !questionnaireState.meetingDeclined) {
+        handleFounderMeetingResponse(reply);
+        return;
+    }
+    
+    // Check if we're in questionnaire mode
+    if (questionnaireState.active && questionnaireState.currentStep < QUALIFYING_QUESTIONS.length) {
+        handleQuestionnaireAnswer(reply);
+        return;
+    }
+    
+    // Check if it's a scheduling action
+    if (reply === 'Schedule Discovery Call') {
+        handleScheduleCall();
+        return;
+    }
+    
+    // Check if it's a time slot selection
+    const lastBotMessage = document.querySelector('.bot-message:last-of-type');
+    if (lastBotMessage && lastBotMessage.hasAttribute('data-slots')) {
+        try {
+            const slots = JSON.parse(lastBotMessage.getAttribute('data-slots'));
+            if (slots && Array.isArray(slots) && slots.length > 0) {
+                handleTimeSlotSelection(reply, slots);
+                return;
+            }
+        } catch (e) {
+            console.error('Error parsing slot data:', e);
+        }
+    }
+    
+    // Check if it's a filter option
+    if (['Refine these results', 'See franchises in different price ranges', 'Explore other industries', 'Learn more about a specific franchise'].includes(reply)) {
+        handleFilterOption(reply);
+        return;
+    }
+    
+    // Check if it's an industry selection
+    const industries = ['Food & Beverage', 'Retail', 'Home Services', 'Fitness & Health', 'Education', 'Other'];
+    if (industries.includes(reply)) {
+        handleIndustrySelection(reply);
+        return;
+    }
+    
+    // Check if it's a price range selection
+    const priceRanges = ['Under $50K', '$50K-$150K', '$150K-$300K', '$300K+', 'Not sure yet'];
+    if (priceRanges.includes(reply)) {
+        handlePriceRangeSelection(reply);
+        return;
+    }
+    
+    // Default: send as regular message
+    userInput.value = reply;
+    handleSendMessage();
 }
 
 function askQuestion(question) {
@@ -558,17 +1093,15 @@ function checkForMeetingKeywords(message) {
 function handleWhatsAppClick(e) {
     e.preventDefault();
     
-    // Check if WhatsApp number is configured
     if (WHATSAPP_NUMBER === 'YOUR_WHATSAPP_NUMBER') {
         alert('Please configure your WhatsApp number in script.js');
         console.error('WhatsApp number not configured. Please update WHATSAPP_NUMBER in script.js');
         return;
     }
     
-    // Create WhatsApp URL
-    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(WHATSAPP_MESSAGE)}`;
+    const encodedMessage = encodeURIComponent(WHATSAPP_MESSAGE);
+    const whatsappUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodedMessage}`;
     
-    // Open WhatsApp in new tab
     window.open(whatsappUrl, '_blank', 'noopener,noreferrer');
 }
 
@@ -577,83 +1110,39 @@ function handleWhatsAppClick(e) {
 // ============================================
 
 function openCalendlyWidget() {
-    // Show the overlay
     if (calendlyOverlay) {
         calendlyOverlay.classList.remove('hidden');
-        document.body.style.overflow = 'hidden'; // Prevent background scrolling
         
         // Load Calendly widget if not already loaded
-        loadCalendlyWidget();
+        if (!window.Calendly) {
+            const script = document.createElement('script');
+            script.src = 'https://assets.calendly.com/assets/external/widget.js';
+            script.async = true;
+            document.body.appendChild(script);
+        }
+        
+        // Initialize Calendly inline widget
+        setTimeout(() => {
+            if (window.Calendly) {
+                const calendlyDiv = document.getElementById('calendly-inline-widget');
+                if (calendlyDiv && !calendlyDiv.hasAttribute('data-calendly-initialized')) {
+                    window.Calendly.initInlineWidget({
+                        url: CALENDLY_URL,
+                        parentElement: calendlyDiv,
+                        prefill: {
+                            name: userEmail ? userEmail.split('@')[0] : '',
+                            email: userEmail || ''
+                        }
+                    });
+                    calendlyDiv.setAttribute('data-calendly-initialized', 'true');
+                }
+            }
+        }, 500);
     }
 }
 
 function closeCalendlyWidget() {
     if (calendlyOverlay) {
         calendlyOverlay.classList.add('hidden');
-        document.body.style.overflow = ''; // Restore scrolling
     }
 }
-
-function loadCalendlyWidget() {
-    // Load Calendly script if not already loaded
-    if (!window.Calendly) {
-        const script = document.createElement('script');
-        script.src = 'https://assets.calendly.com/assets/external/widget.js';
-        script.async = true;
-        document.head.appendChild(script);
-        
-        script.onload = () => {
-            initCalendlyWidget();
-        };
-    } else {
-        initCalendlyWidget();
-    }
-}
-
-function initCalendlyWidget() {
-    const widgetElement = document.getElementById('calendly-widget');
-    const contentElement = document.querySelector('.calendly-content');
-    
-    if (widgetElement && window.Calendly) {
-        // Show loading state
-        if (contentElement) {
-            contentElement.classList.add('loading');
-        }
-        
-        // Clear any existing widget
-        widgetElement.innerHTML = '';
-        
-        // Initialize Calendly popup widget
-        window.Calendly.initInlineWidget({
-            url: CALENDLY_URL,
-            parentElement: widgetElement,
-            prefill: {},
-            utm: {}
-        });
-        
-        // Remove loading state after widget loads
-        setTimeout(() => {
-            if (contentElement) {
-                contentElement.classList.remove('loading');
-            }
-        }, 1000);
-    }
-}
-
-// ============================================
-// INITIALIZE
-// ============================================
-console.log('Chatbot initialized. Ready to chat!');
-
-// Disclaimer should show every time (removed sessionStorage persistence)
-// disclaimerAccepted is always false on page load
-
-// Check backend status on load
-window.addEventListener('load', async () => {
-    const isBackendRunning = await checkBackendStatus();
-    if (!isBackendRunning) {
-        console.warn('⚠️ RAG Backend is not running. Please start the backend server.');
-    } else {
-        console.log('✅ RAG Backend is running and ready!');
-    }
-});

@@ -30,6 +30,75 @@ class LeadQualification {
     };
     
     this.qualificationThreshold = 50; // Minimum points to be considered qualified
+    
+    // Industry categories for filtering
+    this.industries = [
+      'Food & Beverage',
+      'Retail',
+      'Home Services',
+      'Fitness & Health',
+      'Education',
+      'Other'
+    ];
+    
+    // Price ranges for filtering
+    this.priceRanges = [
+      { label: 'Under $50K', min: 0, max: 50000 },
+      { label: '$50K-$150K', min: 50000, max: 150000 },
+      { label: '$150K-$300K', min: 150000, max: 300000 },
+      { label: '$300K+', min: 300000, max: Infinity }
+    ];
+  }
+  
+  /**
+   * Extract filter preferences from message
+   * @param {string} message - User's message
+   * @param {Object} currentFilters - Current filter state
+   * @returns {Object} Updated filter preferences
+   */
+  extractFilters(message, currentFilters = {}) {
+    const lowerMessage = message.toLowerCase();
+    const filters = { ...currentFilters };
+    
+    // Extract industry
+    for (const industry of this.industries) {
+      const industryLower = industry.toLowerCase();
+      if (lowerMessage.includes(industryLower) || 
+          (industry === 'Food & Beverage' && (lowerMessage.includes('food') || lowerMessage.includes('restaurant') || lowerMessage.includes('cafe'))) ||
+          (industry === 'Home Services' && (lowerMessage.includes('home') || lowerMessage.includes('cleaning') || lowerMessage.includes('repair'))) ||
+          (industry === 'Fitness & Health' && (lowerMessage.includes('fitness') || lowerMessage.includes('gym') || lowerMessage.includes('health'))) ||
+          (industry === 'Education' && (lowerMessage.includes('education') || lowerMessage.includes('school') || lowerMessage.includes('tutoring')))) {
+        filters.industry = industry;
+        break;
+      }
+    }
+    
+    // Extract price range
+    for (const range of this.priceRanges) {
+      if (lowerMessage.includes(range.label.toLowerCase()) || 
+          lowerMessage.includes(`$${range.min / 1000}k`) ||
+          lowerMessage.includes(`$${range.min}`)) {
+        filters.priceRange = range.label;
+        break;
+      }
+    }
+    
+    // Extract location (simple - look for city/state patterns)
+    // Check for location keywords followed by a word
+    const locationKeywords = ['in', 'at', 'near', 'around', 'location'];
+    for (const keyword of locationKeywords) {
+      const pattern = new RegExp(`${keyword}\\s+([a-z]+(?:\\s+[a-z]+)?)`, 'i');
+      const match = message.match(pattern);
+      if (match && match[1]) {
+        // Capitalize first letter of each word
+        filters.location = match[1].split(' ').map(word => 
+          word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+        ).join(' ');
+        break;
+      }
+    }
+    
+    return filters;
   }
 
   /**

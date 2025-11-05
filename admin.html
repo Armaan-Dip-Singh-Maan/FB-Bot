@@ -181,6 +181,12 @@
             color: #374151;
         }
 
+        td:nth-child(5) {
+            max-width: 300px;
+            word-wrap: break-word;
+            font-size: 12px;
+        }
+
         .badge {
             display: inline-block;
             padding: 4px 12px;
@@ -465,7 +471,7 @@
                             <th>Messages</th>
                             <th>Qualified</th>
                             <th>Meeting Booked</th>
-                            <th>Drop-off Point</th>
+                            <th>Screening Answers</th>
                             <th>Date</th>
                         </tr>
                     </thead>
@@ -474,6 +480,20 @@
             
             sessions.forEach(session => {
                 const date = new Date(session.startTime).toLocaleString();
+                const hasAnswers = session.questionnaireAnswers && Object.keys(session.questionnaireAnswers).length > 0;
+                
+                let answersHtml = '<span style="color: #9ca3af;">-</span>';
+                if (hasAnswers) {
+                    const answers = session.questionnaireAnswers;
+                    answersHtml = '<div style="font-size: 12px; max-width: 300px;">';
+                    if (answers.exploration_time) answersHtml += `<strong>Experience:</strong> ${answers.exploration_time}<br>`;
+                    if (answers.timeline) answersHtml += `<strong>Timeline:</strong> ${answers.timeline}<br>`;
+                    if (answers.capital) answersHtml += `<strong>Capital:</strong> ${answers.capital}<br>`;
+                    if (answers.decision_maker) answersHtml += `<strong>Decision Maker:</strong> ${answers.decision_maker}<br>`;
+                    if (answers.attraction) answersHtml += `<strong>Attraction:</strong> ${answers.attraction}<br>`;
+                    answersHtml += '</div>';
+                }
+                
                 html += `
                     <tr>
                         <td>${session.email === 'unknown' ? 'Unknown User' : session.email}</td>
@@ -488,7 +508,7 @@
                                 ${session.meetingBooked ? 'Yes' : 'No'}
                             </span>
                         </td>
-                        <td>${session.dropOffPoint || '-'}</td>
+                        <td>${answersHtml}</td>
                         <td>${date}</td>
                     </tr>
                 `;

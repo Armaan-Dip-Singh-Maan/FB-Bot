@@ -76,17 +76,34 @@ app.post('/api/chat', async (req, res) => {
 
     // Use sanitized message
     const sanitizedMessage = securityCheck.sanitized;
+    const lowerMessage = sanitizedMessage.toLowerCase().trim();
 
     // Initialize lead qualification system
     const leadQualifier = new LeadQualification();
     
-    // Analyze message for qualification points (use sanitized message)
-    const qualification = leadQualifier.analyzeMessage(sanitizedMessage, {
-      messageCount: sessionData.messageCount || 1,
-      currentScore: sessionData.qualificationScore || 0
-    });
+    // Detect if this is a greeting (hello, hi, hey, etc.) vs a direct question
+    const greetingPatterns = ['hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon', 'good evening'];
+    const isGreeting = greetingPatterns.some(pattern => lowerMessage === pattern || lowerMessage.startsWith(pattern + ' '));
     
-    const totalScore = qualification.totalScore;
+    // Extract filters from message and session data
+    const currentFilters = sessionData.filters || {};
+    const extractedFilters = leadQualifier.extractFilters(sanitizedMessage, currentFilters);
+    const updatedFilters = { ...currentFilters, ...extractedFilters };
+    
+    // Only start qualification scoring on greetings or if already started
+    // For direct questions, just answer without scoring
+    let qualification = { points: 0, reasons: [], isQualified: false, totalScore: sessionData.qualificationScore || 0 };
+    let totalScore = sessionData.qualificationScore || 0;
+    
+    if (isGreeting || sessionData.qualificationScore > 0) {
+      // Analyze message for qualification points (use sanitized message)
+      qualification = leadQualifier.analyzeMessage(sanitizedMessage, {
+        messageCount: sessionData.messageCount || 1,
+        currentScore: sessionData.qualificationScore || 0
+      });
+      
+      totalScore = qualification.totalScore;
+    }
 
     // Generate embedding for user query (with timeout, use sanitized message)
     const queryEmbedding = await Promise.race([
@@ -122,37 +139,92 @@ app.post('/api/chat', async (req, res) => {
     // Sanitize context before passing to LLM
     context = securityValidator.sanitizeContext(context);
 
+    // Get conversation history and context from session data
+    const conversationHistory = sessionData.conversationHistory || [];
+    const conversationContext = sessionData.conversationContext || {};
+    
+    // Build enhanced context with conversation summary - MAKE IT VERY EXPLICIT
+    let enhancedContext = context;
+    if (conversationContext.franchiseType || conversationContext.location || conversationContext.budget) {
+      const contextSummary = [];
+      const warnings = [];
+      
+      if (conversationContext.franchiseType) {
+        contextSummary.push(`✓ User ALREADY told you: ${conversationContext.franchiseType} franchises`);
+        warnings.push(`DO NOT ask "What type of franchise?" or "What type of business?" - they want ${conversationContext.franchiseType}`);
+      }
+      if (conversationContext.location) {
+        contextSummary.push(`✓ User ALREADY told you location: ${conversationContext.location}`);
+        warnings.push(`DO NOT ask "Where are you looking?" or "What location?" - they want ${conversationContext.location}`);
+      }
+      if (conversationContext.budget) {
+        contextSummary.push(`✓ User ALREADY told you budget: ${conversationContext.budget}`);
+        warnings.push(`DO NOT ask "What's your budget?" or "What's your investment range?" - they have ${conversationContext.budget}`);
+      }
+      
+      enhancedContext = `🚨🚨🚨 CRITICAL - USER ALREADY PROVIDED THIS INFORMATION 🚨🚨🚨\n\n${contextSummary.join('\n')}\n\n⚠️ FORBIDDEN QUESTIONS - DO NOT ASK:\n${warnings.join('\n')}\n\n✅ INSTEAD, USE THIS INFO TO PROVIDE HELPFUL RESPONSES:\n- Reference what they told you: "With your ${conversationContext.budget || 'budget'} for ${conversationContext.franchiseType || 'franchises'}${conversationContext.location ? ' in ' + conversationContext.location : ''}..."\n- Build on their answers, don't start over\n- Provide options and next steps based on what they shared\n\nKnowledge Base Context:\n${context}`;
+    }
+    
     // Generate response using OpenAI with context (with timeout, use sanitized message)
     const response = await Promise.race([
-      generateResponse(sanitizedMessage, context),
+      generateResponse(sanitizedMessage, enhancedContext, conversationHistory),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Response generation timeout')), 15000)
       )
     ]);
 
-    // Check if lead just reached qualification threshold
+    // Check if lead just reached qualification threshold (only if qualification is active)
     const previousScore = sessionData.qualificationScore || 0;
-    const justQualified = previousScore < leadQualifier.qualificationThreshold && 
+    const justQualified = totalScore > 0 && previousScore < leadQualifier.qualificationThreshold && 
                          qualification.totalScore >= leadQualifier.qualificationThreshold;
 
-    // Check if lead is qualified for meeting suggestion
+    // Check if lead is qualified for meeting suggestion (only if qualification is active)
     const alreadySuggested = sessionData.calendlySuggested || false;
-    const shouldSuggestMeeting = qualification.totalScore >= leadQualifier.qualificationThreshold && !alreadySuggested;
+    const shouldSuggestMeeting = totalScore > 0 && qualification.totalScore >= leadQualifier.qualificationThreshold && !alreadySuggested;
     
     // Override AI suggestion - only suggest if qualified OR user explicitly asked
-    const suggestCalendly = shouldSuggestMeeting || justQualified ||
-      (response.suggestCalendly && qualification.isQualified);
+    // For direct questions, don't suggest meetings unless explicitly asked
+    const suggestCalendly = (!isGreeting && totalScore === 0) ? false : 
+      (shouldSuggestMeeting || justQualified || (response.suggestCalendly && qualification.isQualified));
+
+    // Determine if we should suggest filters or show quick replies
+    const msgCount = sessionData.messageCount || 1;
+    const suggestFilters = lowerMessage.includes('filter') || 
+                          lowerMessage.includes('refine') || 
+                          lowerMessage.includes('different') ||
+                          lowerMessage.includes('explore') ||
+                          (msgCount > 3 && !updatedFilters.industry && !updatedFilters.priceRange);
+    
+    // Determine quick replies based on context
+    let quickReplies = null;
+    if (suggestFilters && !suggestCalendly) {
+      quickReplies = [
+        'Refine these results',
+        'See franchises in different price ranges',
+        'Explore other industries',
+        'Learn more about a specific franchise'
+      ];
+    }
 
     const elapsedTime = Date.now() - startTime;
-    const qualificationStatus = leadQualifier.getQualificationStatus(totalScore);
+    const qualificationStatus = totalScore > 0 ? leadQualifier.getQualificationStatus(totalScore) : 'not_started';
     
     console.log(`✅ Chat response in ${elapsedTime}ms`);
-    console.log(`📊 Lead Score: ${totalScore}/${leadQualifier.qualificationThreshold} (${qualificationStatus})`);
-    if (qualification.reasons.length > 0) {
-      console.log(`   Reasons: ${qualification.reasons.join(', ')}`);
+    if (isGreeting) {
+      console.log(`👋 Greeting detected - Starting qualification tracking`);
+    } else if (totalScore === 0) {
+      console.log(`💬 Direct question - Answering without qualification tracking`);
+    } else {
+      console.log(`📊 Lead Score: ${totalScore}/${leadQualifier.qualificationThreshold} (${qualificationStatus})`);
+      if (qualification.reasons.length > 0) {
+        console.log(`   Reasons: ${qualification.reasons.join(', ')}`);
+      }
     }
     if (justQualified) {
       console.log(`🎉 Lead just qualified! Meeting suggestion: ${suggestCalendly}`);
+    }
+    if (Object.keys(updatedFilters).length > 0) {
+      console.log(`🔍 Filters: ${JSON.stringify(updatedFilters)}`);
     }
 
     res.json({ 
@@ -161,7 +233,10 @@ app.post('/api/chat', async (req, res) => {
       qualificationScore: totalScore,
       qualificationStatus: qualificationStatus,
       pointsAdded: qualification.points,
-      isQualified: qualification.isQualified
+      isQualified: qualification.isQualified,
+      quickReplies: quickReplies,
+      suggestFilters: suggestFilters,
+      filters: updatedFilters
     });
 
   } catch (error) {
@@ -333,6 +408,92 @@ app.post('/api/metrics/update-email', async (req, res) => {
   } catch (error) {
     console.error('Error updating email:', error);
     res.status(500).json({ error: 'Failed to update email' });
+  }
+});
+
+app.post('/api/metrics/save-questionnaire', async (req, res) => {
+  try {
+    const { sessionId, answers } = req.body;
+    await metricsTracker.saveQuestionnaireAnswers(sessionId, answers);
+    console.log(`✅ Questionnaire answers saved for session ${sessionId}`);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error saving questionnaire:', error);
+    res.status(500).json({ success: false, error: 'Failed to save questionnaire' });
+  }
+});
+
+// Get available Calendly time slots
+app.get('/api/calendly/availability', async (req, res) => {
+  try {
+    // Generate 3 available time slots (next 3 business days with 2 time options each)
+    const slots = [];
+    const now = new Date();
+    
+    // Get next 3 business days (Monday-Friday)
+    let date = new Date(now);
+    date.setDate(date.getDate() + 1); // Start from tomorrow
+    
+    while (slots.length < 3) {
+      // Skip weekends
+      if (date.getDay() !== 0 && date.getDay() !== 6) {
+        const dateStr = date.toLocaleDateString('en-US', { 
+          weekday: 'short', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        
+        // Add 2 time slots per day (10 AM and 2 PM)
+        slots.push({
+          date: dateStr,
+          time: '10:00 AM',
+          datetime: date.toISOString().split('T')[0] + 'T10:00:00',
+          fullDate: date.toISOString().split('T')[0]
+        });
+        
+        if (slots.length < 3) {
+          slots.push({
+            date: dateStr,
+            time: '2:00 PM',
+            datetime: date.toISOString().split('T')[0] + 'T14:00:00',
+            fullDate: date.toISOString().split('T')[0]
+          });
+        }
+      }
+      date.setDate(date.getDate() + 1);
+    }
+    
+    // Return only first 3 slots
+    res.json({ success: true, slots: slots.slice(0, 3) });
+  } catch (error) {
+    console.error('Error getting Calendly availability:', error);
+    res.status(500).json({ success: false, error: 'Failed to get availability' });
+  }
+});
+
+// Confirm booking
+app.post('/api/calendly/book', async (req, res) => {
+  try {
+    const { sessionId, slot, email, name } = req.body;
+    
+    // Track booking
+    if (sessionId) {
+      await metricsTracker.trackMeetingBooking(sessionId);
+    }
+    
+    // Create Calendly booking URL
+    const bookingUrl = `${calendlyConfig.username ? `https://calendly.com/${calendlyConfig.username}` : 'https://calendly.com/franquiciaboost'}?date=${slot.fullDate}&time=${slot.datetime}`;
+    
+    console.log(`✅ Meeting booked: ${slot.date} at ${slot.time} for ${email || 'user'}`);
+    
+    res.json({ 
+      success: true, 
+      bookingUrl,
+      message: `Great! I've scheduled your call for ${slot.date} at ${slot.time}. You'll receive a confirmation email shortly.`
+    });
+  } catch (error) {
+    console.error('Error booking meeting:', error);
+    res.status(500).json({ success: false, error: 'Failed to book meeting' });
   }
 });
 

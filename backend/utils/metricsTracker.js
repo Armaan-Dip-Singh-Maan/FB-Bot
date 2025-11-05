@@ -284,6 +284,21 @@ class MetricsTracker {
   }
 
   /**
+   * Save questionnaire answers for a session
+   */
+  async saveQuestionnaireAnswers(sessionId, answers) {
+    await this.ensureLoaded();
+    
+    const session = this.sessions.find(s => s.sessionId === sessionId);
+    if (session) {
+      session.questionnaireAnswers = answers;
+      session.questionnaireCompleted = true;
+      session.questionnaireCompletedAt = new Date().toISOString();
+      await this.saveSessions();
+    }
+  }
+
+  /**
    * Get all metrics
    */
   async getMetrics() {

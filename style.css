@@ -19,88 +19,36 @@ body {
     width: 60px;
     height: 60px;
     border-radius: 50%;
-    background: #2563eb;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: white;
     border: none;
     font-size: 28px;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    transition: transform 0.2s;
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 999;
 }
 
 .chatbot-toggle:hover {
-    transform: scale(1.05);
+    transform: scale(1.1);
+    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.5);
+}
+
+.chatbot-toggle:active {
+    transform: scale(0.95);
 }
 
 .chatbot-toggle.hidden {
     display: none;
 }
 
-/* WhatsApp Widget - Floating Side Button */
-.whatsapp-widget-side {
-    position: fixed;
-    bottom: 160px;
-    right: 20px;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: #25D366;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
-    transition: transform 0.2s, box-shadow 0.2s;
-    z-index: 998;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.whatsapp-widget-side:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(37, 211, 102, 0.5);
-}
-
-.whatsapp-widget-side svg {
-    width: 32px;
-    height: 32px;
-}
-
-.whatsapp-tooltip {
-    position: absolute;
-    bottom: 70px;
-    right: 0;
-    background: #333;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 12px;
-    white-space: nowrap;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-}
-
-.whatsapp-widget-side:hover .whatsapp-tooltip {
-    opacity: 1;
-}
-
-.whatsapp-tooltip::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    right: 20px;
-    border: 5px solid transparent;
-    border-top-color: #333;
-}
 
 /* WhatsApp Widget - Inside Chat Input */
 .whatsapp-widget {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: #25D366;
+    background: linear-gradient(135deg, #25D366 0%, #20BA5A 100%);
     color: white;
     display: flex;
     align-items: center;
@@ -108,13 +56,19 @@ body {
     text-decoration: none;
     cursor: pointer;
     flex-shrink: 0;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border: none;
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
 }
 
 .whatsapp-widget:hover {
-    background: #20BA5A;
-    transform: scale(1.05);
+    background: linear-gradient(135deg, #20BA5A 0%, #1DA851 100%);
+    transform: scale(1.1);
+    box-shadow: 0 4px 12px rgba(37, 211, 102, 0.4);
+}
+
+.whatsapp-widget:active {
+    transform: scale(0.95);
 }
 
 .whatsapp-widget svg {
@@ -130,11 +84,24 @@ body {
     width: 380px;
     height: 550px;
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25), 0 0 0 1px rgba(0,0,0,0.05);
     display: flex;
     flex-direction: column;
     z-index: 1000;
+    animation: slideInUp 0.3s ease-out;
+    overflow: hidden;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
 }
 
 .chatbot-container.hidden {
@@ -143,13 +110,14 @@ body {
 
 /* Header */
 .chatbot-header {
-    background: #2563eb;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: white;
     padding: 16px;
-    border-radius: 12px 12px 0 0;
+    border-radius: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .header-content {
@@ -158,8 +126,44 @@ body {
     gap: 12px;
 }
 
+.bot-icon-container {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
 .bot-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    /* Background removal techniques */
+    mix-blend-mode: multiply;
+    filter: contrast(1.1);
+}
+
+/* Advanced white background removal for logo */
+.bot-icon[src*="logo"] {
+    background: transparent;
+    mix-blend-mode: normal;
+    /* Try to remove white background */
+    filter: contrast(1.2) brightness(1.1);
+    /* Alternative: use blend mode to hide white */
+    mix-blend-mode: darken;
+}
+
+/* If blend mode doesn't work, try this */
+.bot-icon[src*="logo"]:not([src=""]) {
+    /* Remove white pixels using CSS blend mode */
+    background-blend-mode: multiply;
+}
+
+.bot-icon-fallback {
     font-size: 32px;
+    display: block;
 }
 
 .chatbot-header h3 {
@@ -250,6 +254,38 @@ body {
     height: 32px;
     font-size: 24px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    /* Background removal techniques */
+    mix-blend-mode: multiply;
+    filter: contrast(1.1);
+    display: block;
+}
+
+/* Better background removal for logo images */
+.avatar-img[src*="logo"] {
+    background: transparent;
+    /* Remove white background using blend mode */
+    mix-blend-mode: darken;
+    filter: contrast(1.2) brightness(1.1);
+}
+
+/* Alternative background removal technique */
+.avatar-img[src*="logo"]:not([src=""]) {
+    background-blend-mode: multiply;
+}
+
+.avatar-fallback {
+    font-size: 24px;
+    display: none;
 }
 
 .bubble {
@@ -346,20 +382,23 @@ body {
 #user-input {
     flex: 1;
     padding: 10px 14px;
-    border: 1px solid #d1d5db;
+    border: 2px solid #e5e7eb;
     border-radius: 20px;
     font-size: 14px;
     outline: none;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    background: white;
 }
 
 #user-input:focus {
     border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
 }
 
 #send-btn {
     width: 40px;
     height: 40px;
-    background: #2563eb;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: white;
     border: none;
     border-radius: 50%;
@@ -367,16 +406,25 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 #send-btn:hover {
-    background: #1d4ed8;
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+}
+
+#send-btn:active {
+    transform: scale(0.95);
 }
 
 #send-btn:disabled {
     background: #9ca3af;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 /* Suggested Questions */
@@ -390,21 +438,79 @@ body {
 .suggested-question {
     background: #f3f4f6;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    padding: 8px 12px;
-    font-size: 12px;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
     color: #374151;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     text-align: left;
-    line-height: 1.4;
+    line-height: 1.5;
+    font-weight: 500;
 }
 
 .suggested-question:hover {
-    background: #2563eb;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: white;
     border-color: #2563eb;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* Quick Reply Buttons */
+.quick-replies {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.quick-reply-btn {
+    background: white;
+    border: 2px solid #2563eb;
+    border-radius: 20px;
+    padding: 10px 16px;
+    font-size: 13px;
+    color: #2563eb;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    text-align: left;
+    font-weight: 500;
+    width: 100%;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+}
+
+.quick-reply-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(37, 99, 235, 0.1);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.quick-reply-btn:hover {
+    background: #2563eb;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(37, 99, 235, 0.4);
+    border-color: #1d4ed8;
+}
+
+.quick-reply-btn:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.quick-reply-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
 }
 
 /* Calendly Integration Styles */
@@ -582,10 +688,11 @@ body {
 .disclaimer-banner {
     background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
     border: 2px solid #fbbf24;
-    border-radius: 8px;
-    padding: 12px 16px;
+    border-radius: 12px;
+    padding: 14px 16px;
     margin-bottom: 16px;
     animation: slideDown 0.3s ease;
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
 }
 
 .disclaimer-banner.hidden {
@@ -609,9 +716,40 @@ body {
     gap: 12px;
 }
 
-.disclaimer-icon {
-    font-size: 20px;
+.disclaimer-icon-container {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
+    position: relative;
+}
+
+.disclaimer-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    /* Background removal techniques */
+    mix-blend-mode: multiply;
+    filter: contrast(1.1);
+}
+
+.disclaimer-icon[src*="logo"] {
+    background: transparent;
+    /* Remove white background */
+    mix-blend-mode: darken;
+    filter: contrast(1.2) brightness(1.1);
+}
+
+.disclaimer-icon[src*="logo"]:not([src=""]) {
+    background-blend-mode: multiply;
+}
+
+.disclaimer-icon-fallback {
+    font-size: 20px;
+    display: none;
 }
 
 .disclaimer-text {
@@ -926,14 +1064,6 @@ body {
         border-radius: 0;
     }
     
-    .whatsapp-widget-side {
-        bottom: 20px;
-        right: 20px;
-    }
-    
-    .whatsapp-widget-side:hover .whatsapp-tooltip {
-        opacity: 0; /* Hide tooltip on mobile */
-    }
     
     .calendly-modal {
         width: 100%;

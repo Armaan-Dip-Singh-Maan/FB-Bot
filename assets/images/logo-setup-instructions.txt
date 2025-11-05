@@ -1,0 +1,60 @@
+FRANQUICIA BOOST LOGO SETUP INSTRUCTIONS
+==========================================
+
+STEP 1: Get Your Logo Image
+----------------------------
+1. Take the FRANQUICIA BOOST logo image you want to use
+2. The logo should be in one of these formats:
+   - PNG with transparent background (BEST OPTION)
+   - PNG with white background (we'll try to remove it)
+   - SVG format (if available)
+
+STEP 2: Remove White Background (If Needed)
+--------------------------------------------
+If your logo has a white background, you can remove it using:
+
+OPTION A - Online Tools (Easiest):
+- Visit: https://www.remove.bg/
+- Upload your logo
+- Download the result (should have transparent background)
+- Save as: franquicia-boost-logo.png
+
+OPTION B - Image Editors:
+- GIMP (Free): https://www.gimp.org/
+- Photoshop: Use Magic Wand or Background Eraser tool
+- Paint.NET (Free): Use Magic Wand tool
+- Canva: Remove background feature
+
+OPTION C - Command Line (Advanced):
+- Use ImageMagick: convert logo.png -transparent white franquicia-boost-logo.png
+
+STEP 3: Place the File
+-----------------------
+1. Save your logo file as: franquicia-boost-logo.png
+2. Place it in: assets/images/franquicia-boost-logo.png
+3. The file path should be: assets/images/franquicia-boost-logo.png
+
+STEP 4: Test
+------------
+1. Open the chatbot in your browser
+2. The logo should appear in:
+   - Chat header (top left)
+   - Bot message avatars
+   - Disclaimer banner
+   - Typing indicator
+3. If logo doesn't appear, check browser console for errors
+
+STEP 5: Adjust if Needed
+-------------------------
+If the white background doesn't fully disappear:
+1. The CSS uses blend modes to try to remove it
+2. For best results, use a PNG with transparent background
+3. You can also edit the CSS in style.css to adjust filters
+
+FILE STRUCTURE:
+--------------
+FranquiciaBoost Bot/
+└── assets/
+    └── images/
+        └── franquicia-boost-logo.png  <-- Place your logo here
+

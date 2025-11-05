@@ -61,9 +61,12 @@ class VectorDB {
    * @param {Array} documents - Array of documents with embeddings
    */
   async addDocuments(documents) {
+    await this.ensureLoaded();
     this.documents.push(...documents);
-    await this.saveToDisk();
-    console.log(`Added ${documents.length} documents to vector database`);
+    // Save to disk asynchronously (don't wait)
+    this.saveToDisk().catch(err => {
+      console.error('Error saving to disk (non-blocking):', err);
+    });
   }
 
   /**
