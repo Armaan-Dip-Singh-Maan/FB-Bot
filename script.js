@@ -489,6 +489,8 @@ async function showAvailableTimeSlots() {
         if (data.success && data.slots && data.slots.length > 0) {
             // Format slots with better display
             const timeOptions = data.slots.map(slot => `📅 ${slot.date} at ${slot.time}`);
+            // Add "Other" option for Calendly redirect
+            timeOptions.push('Other');
             
             addMessageWithQuickReplies(
                 "Perfect! Here are some available times for your call with our founder. Which works best for you? 📅",
@@ -1003,6 +1005,17 @@ function addMessageWithQuickReplies(text, quickReplies, numbered = false, slotDa
                 button.style.fontSize = '15px';
                 button.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.3)';
             }
+            // Special styling for "Other" option (Calendly redirect)
+            if (reply === 'Other' && isTimeSlot) {
+                button.classList.add('other-time-option-btn');
+                button.style.background = 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)';
+                button.style.color = '#475569';
+                button.style.borderColor = '#cbd5e1';
+                button.style.fontWeight = '600';
+                button.style.padding = '14px 20px';
+                button.style.fontSize = '15px';
+                button.style.borderStyle = 'dashed';
+            }
             button.textContent = numbered ? `${index + 1}: ${reply}` : reply;
             button.onclick = () => handleQuickReply(reply);
             quickRepliesDiv.appendChild(button);
@@ -1040,6 +1053,19 @@ function handleQuickReply(reply) {
     // Check if it's a time slot selection
     const lastBotMessage = document.querySelector('.bot-message:last-of-type');
     if (lastBotMessage && lastBotMessage.hasAttribute('data-slots')) {
+        // Check if user selected "Other" option
+        if (reply === 'Other' || reply.trim() === 'Other') {
+            addMessageToUI(reply, 'user');
+            setTimeout(() => {
+                addMessageToUI("No problem! I'll redirect you to our Calendly page where you can choose any available time that works for you. 🗓️", 'bot');
+                // Redirect to Calendly after a short delay
+                setTimeout(() => {
+                    window.open(CALENDLY_URL, '_blank', 'noopener,noreferrer');
+                }, 1000);
+            }, 500);
+            return;
+        }
+        
         try {
             const slots = JSON.parse(lastBotMessage.getAttribute('data-slots'));
             if (slots && Array.isArray(slots) && slots.length > 0) {
