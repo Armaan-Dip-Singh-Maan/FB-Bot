@@ -384,11 +384,6 @@ const QUALIFYING_QUESTIONS = [
         question: "Fantastic! And are you the primary decision-maker for this investment, or will others be involved?",
         type: 'quick_reply',
         options: ['Just me', 'Me + partner/spouse', 'Family decision', 'Business partners']
-    },
-    {
-        id: 'attraction',
-        question: "Wonderful! One last question: What attracted you most to Pizza Franchise X?",
-        type: 'text_input'
     }
 ];
 
