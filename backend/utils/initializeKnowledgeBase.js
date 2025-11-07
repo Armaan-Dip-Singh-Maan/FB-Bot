@@ -16,11 +16,11 @@ async function initializeKnowledgeBase() {
     const pdfsDir = path.join(__dirname, '../../pdfs');
     
     try {
-        // Check if knowledge base is already initialized
-        const docCount = await vectorDB.getDocumentCount();
-        if (docCount > 0) {
-            console.log(`✅ Knowledge base already initialized with ${docCount} documents`);
-            return;
+        // Always rebuild the knowledge base so new FDDs are ingested
+        const existingDocs = await vectorDB.getDocumentCount();
+        if (existingDocs > 0) {
+            console.log(`♻️  Rebuilding knowledge base. Clearing existing ${existingDocs} documents...`);
+            await vectorDB.clear();
         }
 
         let totalChunks = 0;

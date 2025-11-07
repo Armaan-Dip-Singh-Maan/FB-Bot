@@ -17,6 +17,77 @@ const calendlyConfig = require('./config/calendly');
 const websiteConfig = require('./config/website');
 const { WebsiteContentUpdater } = require('./scripts/update-website-content');
 
+function isSpecificQuestion(message = '') {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  const specificityKeywords = [
+    'initial investment',
+    'investment',
+    'royalty',
+    'fees',
+    'financials',
+    'territor',
+    'training',
+    'support',
+    'marketing fund',
+    'item 19',
+    'earnings',
+    'revenue',
+    'cost',
+    'break-even',
+    'payback',
+    'franchise fee',
+    'liquid capital',
+    'net worth',
+    'fdd',
+    'disclosure',
+    'royalties',
+    'franchise agreement',
+    'obligation',
+    'equipment',
+    'build-out',
+    'specific',
+    'detail'
+  ];
+
+  if (specificityKeywords.some(keyword => lower.includes(keyword))) {
+    return true;
+  }
+
+  // Detect explicit numbers or dollar amounts which usually mean specific questions
+  if (/[\d]+/.test(lower) && /\$|%|k|million|thousand/.test(lower)) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildGeneralResponse({ messageCount, conversationContext = {}, totalScore = 0, leadQualifier, leadQualificationStatus, filters }) {
+  if (messageCount > 3) {
+    return null;
+  }
+
+  const responses = [
+    "Hi there! I’m Franquicia Boost’s AI guide. We help shortlist franchises and prep you for your next discovery call. Tell me what you’re exploring and I’ll point you in the right direction.",
+    "Great! I can share ballpark info on industries, investment ranges, and how our matching process works. When you’re ready for specifics, just ask and I’ll dig into the FDD insights.",
+    "Awesome—keep the questions coming. The moment you need details like fees, financials, or training, ask and I’ll pull the exact info from the disclosure documents."
+  ];
+
+  const index = Math.max(0, Math.min(responses.length - 1, messageCount - 1));
+
+  return {
+    response: responses[index],
+    suggestCalendly: false,
+    qualificationScore: totalScore,
+    qualificationStatus: leadQualificationStatus || leadQualifier.getQualificationStatus(totalScore),
+    pointsAdded: 0,
+    isQualified: totalScore >= leadQualifier.qualificationThreshold,
+    quickReplies: null,
+    suggestFilters: false,
+    filters: filters
+  };
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
@@ -103,6 +174,23 @@ app.post('/api/chat', async (req, res) => {
       });
       
       totalScore = qualification.totalScore;
+    }
+
+    // Serve high-level responses for the first few questions unless the user asks for specifics
+    const messageCount = sessionData.messageCount || 1;
+    const qualificationStatusPreview = leadQualifier.getQualificationStatus(totalScore);
+
+    if (messageCount <= 3 && !isSpecificQuestion(sanitizedMessage)) {
+      const generalResponse = buildGeneralResponse({
+        messageCount,
+        conversationContext,
+        totalScore,
+        leadQualifier,
+        leadQualificationStatus: qualificationStatusPreview,
+        filters: updatedFilters
+      });
+
+      return res.json(generalResponse);
     }
 
     // Generate embedding for user query (with timeout, use sanitized message)
