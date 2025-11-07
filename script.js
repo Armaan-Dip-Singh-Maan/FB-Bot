@@ -459,15 +459,37 @@ function completeQuestionnaire() {
 }
 
 async function handleScheduleCall() {
-    // User clicked "Schedule Discovery Call"
-    // Check if questionnaire is completed
-    if (questionnaireState.completed || questionnaireState.currentStep >= QUALIFYING_QUESTIONS.length) {
-        // Questionnaire is complete, fetch available dates/times
-        await showAvailableTimeSlots();
-    } else if (!questionnaireState.active) {
-        // Start questionnaire if not already started
-        startQuestionnaire();
-    }
+    addMessageToUI('Schedule Discovery Call', 'user');
+
+    conversationHistory.push({
+        role: 'user',
+        content: 'Schedule Discovery Call'
+    });
+    messageCount++;
+
+    // Track that the user accepted the meeting prompt
+    questionnaireState.meetingAccepted = true;
+    questionnaireState.askedAboutMeeting = true;
+    questionnaireState.meetingDeclined = false;
+    questionnaireState.active = false;
+
+    setTimeout(() => {
+        const redirectMessage = "Great! I'll send you to our Calendly page so you can pick the time that works best. Once you book, you'll receive a confirmation email. 😊";
+        addMessageToUI(redirectMessage, 'bot');
+
+        setTimeout(() => {
+            window.open(CALENDLY_URL, '_blank', 'noopener,noreferrer');
+            calendlySuggested = true;
+
+            if (sessionId) {
+                fetch(`${RAG_BACKEND_URL}/api/metrics/track-meeting`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, source: 'calendly_redirect' })
+                }).catch(err => console.error('Error tracking meeting:', err));
+            }
+        }, 800);
+    }, 400);
 }
 
 async function showAvailableTimeSlots() {

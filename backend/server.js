@@ -167,7 +167,7 @@ app.post('/api/chat', async (req, res) => {
     
     // Generate response using OpenAI with context (with timeout, use sanitized message)
     const response = await Promise.race([
-      generateResponse(sanitizedMessage, enhancedContext, conversationHistory),
+      generateResponse(sanitizedMessage, enhancedContext, conversationHistory, conversationContext),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Response generation timeout')), 15000)
       )

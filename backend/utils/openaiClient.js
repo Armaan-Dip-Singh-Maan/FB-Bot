@@ -31,7 +31,7 @@ async function generateEmbedding(text) {
  * @param {string} context - Relevant context from knowledge base
  * @returns {Object} Generated response with interest detection
  */
-async function generateResponse(userMessage, context, conversationHistory = []) {
+async function generateResponse(userMessage, context, conversationHistory = [], conversationContext = {}) {
   try {
     const systemPrompt = `You are a professional AI assistant for Franquicia Boost, a digital franchise growth platform. You help users discover franchise opportunities, connect franchisors with qualified leads, and guide franchise consultants.
 
@@ -119,6 +119,47 @@ Remember: ALWAYS maintain context. Reference what the user already told you. Bui
         content: systemPrompt
       }
     ];
+
+    // Reinforce previously provided user context to prevent repeated questions
+    if (conversationContext && typeof conversationContext === 'object') {
+      const contextStatements = [];
+      const forbiddenQuestions = [];
+
+      if (conversationContext.franchiseType) {
+        contextStatements.push(`• Franchise type: ${conversationContext.franchiseType}`);
+        forbiddenQuestions.push('- Do NOT ask about their franchise type again.');
+      }
+
+      if (conversationContext.location) {
+        contextStatements.push(`• Location: ${conversationContext.location}`);
+        forbiddenQuestions.push('- Do NOT ask where they want to open again.');
+      }
+
+      if (conversationContext.budget) {
+        contextStatements.push(`• Budget: ${conversationContext.budget}`);
+        forbiddenQuestions.push('- Do NOT ask about their investment budget again.');
+      }
+
+      if (Array.isArray(conversationContext.interests) && conversationContext.interests.length > 0) {
+        contextStatements.push(`• Interests: ${conversationContext.interests.join(', ')}`);
+      }
+
+      if (contextStatements.length > 0) {
+        messages.push({
+          role: 'system',
+          content: `🚨 USER CONTEXT (already confirmed):
+${contextStatements.join('\n')}
+
+❌ FORBIDDEN:
+${forbiddenQuestions.join('\n')}
+
+✅ ACTION:
+- Reference the context above in your response.
+- Provide NEW information or next steps.
+- Never repeat requests for details already provided.`
+        });
+      }
+    }
     
     // Add conversation history (last 12 messages to maintain better context)
     // Include both user and assistant messages to maintain full conversation flow
