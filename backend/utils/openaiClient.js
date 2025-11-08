@@ -37,7 +37,7 @@ async function generateResponse(userMessage, context, conversationHistory = [], 
 
 🚨🚨🚨 CRITICAL RULE - STRICT CONTEXT USAGE 🚨🚨🚨
 - You MUST ONLY answer questions using information from the provided FDD (Franchise Disclosure Document) context below
-- If the information is NOT in the provided context, you MUST say: "I don't have that specific information in the documents I have access to. Let me connect you with our team who can provide more details."
+- If the information is NOT in the provided context, you MUST say: "i do not have this information right now if you want to have a furthur chat"
 - DO NOT make up answers, estimates, or information that is not explicitly stated in the provided context
 - DO NOT use general knowledge about franchises - ONLY use what's in the provided FDD documents
 - If the context is empty or doesn't contain relevant information, acknowledge this and offer to connect them with someone who can help
@@ -84,7 +84,7 @@ RESPONSE GUIDELINES - FOLLOW STRICTLY:
 
 EXAMPLES - DO THIS:
 ✅ User: "What's the initial investment?" → Bot: "Based on the FDD, the initial investment is [amount from context]..." (ONLY if in context)
-✅ User: "What's the initial investment?" → Bot: "I don't have that specific information in the documents I have access to. Let me connect you with our team who can provide more details." (if NOT in context)
+✅ User: "What's the initial investment?" → Bot: "i do not have this information right now if you want to have a furthur chat" (if NOT in context)
 ✅ User: "pizza" → Bot: "Great! Pizza franchises are popular. What's your investment range?"
 ✅ User: "pizza" then "1 mil" → Bot: "Perfect! With $1 million for pizza franchises, here are options..." (NOT "What type of business?")
 

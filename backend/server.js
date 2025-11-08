@@ -178,12 +178,14 @@ app.post('/api/chat', async (req, res) => {
 
     // Serve high-level responses for the first few questions unless the user asks for specifics
     const messageCount = sessionData.messageCount || 1;
+    const conversationHistory = sessionData.conversationHistory || [];
+    const sessionConversationContext = sessionData.conversationContext || {};
     const qualificationStatusPreview = leadQualifier.getQualificationStatus(totalScore);
 
     if (messageCount <= 3 && !isSpecificQuestion(sanitizedMessage)) {
       const generalResponse = buildGeneralResponse({
         messageCount,
-        conversationContext,
+        conversationContext: sessionConversationContext,
         totalScore,
         leadQualifier,
         leadQualificationStatus: qualificationStatusPreview,
@@ -227,35 +229,33 @@ app.post('/api/chat', async (req, res) => {
     // Sanitize context before passing to LLM
     context = securityValidator.sanitizeContext(context);
 
-    // Get conversation history and context from session data
-    const conversationHistory = sessionData.conversationHistory || [];
-    const conversationContext = sessionData.conversationContext || {};
+    // conversationHistory and conversationContext already initialized above
     
     // Build enhanced context with conversation summary - MAKE IT VERY EXPLICIT
     let enhancedContext = context;
-    if (conversationContext.franchiseType || conversationContext.location || conversationContext.budget) {
+    if (sessionConversationContext.franchiseType || sessionConversationContext.location || sessionConversationContext.budget) {
       const contextSummary = [];
       const warnings = [];
       
-      if (conversationContext.franchiseType) {
-        contextSummary.push(`✓ User ALREADY told you: ${conversationContext.franchiseType} franchises`);
-        warnings.push(`DO NOT ask "What type of franchise?" or "What type of business?" - they want ${conversationContext.franchiseType}`);
+      if (sessionConversationContext.franchiseType) {
+        contextSummary.push(`✓ User ALREADY told you: ${sessionConversationContext.franchiseType} franchises`);
+        warnings.push(`DO NOT ask "What type of franchise?" or "What type of business?" - they want ${sessionConversationContext.franchiseType}`);
       }
-      if (conversationContext.location) {
-        contextSummary.push(`✓ User ALREADY told you location: ${conversationContext.location}`);
-        warnings.push(`DO NOT ask "Where are you looking?" or "What location?" - they want ${conversationContext.location}`);
+      if (sessionConversationContext.location) {
+        contextSummary.push(`✓ User ALREADY told you location: ${sessionConversationContext.location}`);
+        warnings.push(`DO NOT ask "Where are you looking?" or "What location?" - they want ${sessionConversationContext.location}`);
       }
-      if (conversationContext.budget) {
-        contextSummary.push(`✓ User ALREADY told you budget: ${conversationContext.budget}`);
-        warnings.push(`DO NOT ask "What's your budget?" or "What's your investment range?" - they have ${conversationContext.budget}`);
+      if (sessionConversationContext.budget) {
+        contextSummary.push(`✓ User ALREADY told you budget: ${sessionConversationContext.budget}`);
+        warnings.push(`DO NOT ask "What's your budget?" or "What's your investment range?" - they have ${sessionConversationContext.budget}`);
       }
       
-      enhancedContext = `🚨🚨🚨 CRITICAL - USER ALREADY PROVIDED THIS INFORMATION 🚨🚨🚨\n\n${contextSummary.join('\n')}\n\n⚠️ FORBIDDEN QUESTIONS - DO NOT ASK:\n${warnings.join('\n')}\n\n✅ INSTEAD, USE THIS INFO TO PROVIDE HELPFUL RESPONSES:\n- Reference what they told you: "With your ${conversationContext.budget || 'budget'} for ${conversationContext.franchiseType || 'franchises'}${conversationContext.location ? ' in ' + conversationContext.location : ''}..."\n- Build on their answers, don't start over\n- Provide options and next steps based on what they shared\n\nKnowledge Base Context:\n${context}`;
+      enhancedContext = `🚨🚨🚨 CRITICAL - USER ALREADY PROVIDED THIS INFORMATION 🚨🚨🚨\n\n${contextSummary.join('\n')}\n\n⚠️ FORBIDDEN QUESTIONS - DO NOT ASK:\n${warnings.join('\n')}\n\n✅ INSTEAD, USE THIS INFO TO PROVIDE HELPFUL RESPONSES:\n- Reference what they told you: "With your ${sessionConversationContext.budget || 'budget'} for ${sessionConversationContext.franchiseType || 'franchises'}${sessionConversationContext.location ? ' in ' + sessionConversationContext.location : ''}..."\n- Build on their answers, don't start over\n- Provide options and next steps based on what they shared\n\nKnowledge Base Context:\n${context}`;
     }
     
     // Generate response using OpenAI with context (with timeout, use sanitized message)
     const response = await Promise.race([
-      generateResponse(sanitizedMessage, enhancedContext, conversationHistory, conversationContext),
+      generateResponse(sanitizedMessage, enhancedContext, conversationHistory, sessionConversationContext),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Response generation timeout')), 15000)
       )
@@ -272,7 +272,7 @@ app.post('/api/chat', async (req, res) => {
     
     // Override AI suggestion - only suggest if qualified OR user explicitly asked
     // For direct questions, don't suggest meetings unless explicitly asked
-    const suggestCalendly = (!isGreeting && totalScore === 0) ? false : 
+    let suggestCalendly = (!isGreeting && totalScore === 0) ? false : 
       (shouldSuggestMeeting || justQualified || (response.suggestCalendly && qualification.isQualified));
 
     // Determine if we should suggest filters or show quick replies
@@ -292,6 +292,14 @@ app.post('/api/chat', async (req, res) => {
         'Explore other industries',
         'Learn more about a specific franchise'
       ];
+    }
+
+    if (response.response) {
+      const fallbackPhrase = 'i do not have this information right now if you want to have a furthur chat';
+      if (response.response.trim().toLowerCase() === fallbackPhrase) {
+        quickReplies = ['Schedule Discovery Call'];
+        suggestCalendly = true;
+      }
     }
 
     const elapsedTime = Date.now() - startTime;

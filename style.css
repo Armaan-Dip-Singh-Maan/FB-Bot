@@ -7,7 +7,7 @@ sk-proj-ncUvW2q0_NFn1FKfQRIUCJ8wxKv0CRYo5_ENCQiHeggo_1Fumqr6FspOFh-O3FEe2jS9AhAr
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #f5f5f5;
+  background: #f7f7f7;
 }
 
 /* Toggle Button */
@@ -108,8 +108,8 @@ body {
 
 /* Header */
 .chatbot-header {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: white;
+  background: #ffffff;
+  color: #511d53;
   padding: 16px;
   border-radius: 0;
   display: flex;
@@ -172,7 +172,7 @@ body {
 .feedback-btn {
   background: transparent;
   border: none;
-  color: white;
+  color: #511d53;
   font-size: 18px;
   cursor: pointer;
   width: 32px;
@@ -186,19 +186,20 @@ body {
 }
 
 .feedback-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(81, 29, 83, 0.08);
   transform: scale(1.1);
 }
 
 .status {
   font-size: 12px;
   opacity: 0.9;
+  color: #511d53;
 }
 
 .close-btn {
   background: transparent;
   border: none;
-  color: white;
+  color: #511d53;
   font-size: 24px;
   cursor: pointer;
   width: 32px;
@@ -208,7 +209,7 @@ body {
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(81, 29, 83, 0.08);
 }
 
 /* Messages Area */
@@ -216,7 +217,7 @@ body {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
-  background: #f9fafb;
+  background: #f7f7f7;
 }
 
 .chat-messages::-webkit-scrollbar {
@@ -379,6 +380,7 @@ body {
   display: flex;
   gap: 8px;
   align-items: center;
+  background: #ffffff;
 }
 
 #user-input {

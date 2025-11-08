@@ -1,0 +1,83 @@
+warning: in the working copy of 'style.css', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/style.css b/style.css[m
+[1mindex 30cdca3..621ca6c 100644[m
+[1m--- a/style.css[m
+[1m+++ b/style.css[m
+[36m@@ -7,7 +7,7 @@[m [msk-proj-ncUvW2q0_NFn1FKfQRIUCJ8wxKv0CRYo5_ENCQiHeggo_1Fumqr6FspOFh-O3FEe2jS9AhAr[m
+ [m
+ body {[m
+   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;[m
+[31m-  background: #f5f5f5;[m
+[32m+[m[32m  background: #f7f7f7;[m
+ }[m
+ [m
+ /* Toggle Button */[m
+[36m@@ -108,8 +108,8 @@[m [mbody {[m
+ [m
+ /* Header */[m
+ .chatbot-header {[m
+[31m-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);[m
+[31m-  color: white;[m
+[32m+[m[32m  background: #ffffff;[m
+[32m+[m[32m  color: #511d53;[m
+   padding: 16px;[m
+   border-radius: 0;[m
+   display: flex;[m
+[36m@@ -172,7 +172,7 @@[m [mbody {[m
+ .feedback-btn {[m
+   background: transparent;[m
+   border: none;[m
+[31m-  color: white;[m
+[32m+[m[32m  color: #511d53;[m
+   font-size: 18px;[m
+   cursor: pointer;[m
+   width: 32px;[m
+[36m@@ -186,19 +186,20 @@[m [mbody {[m
+ }[m
+ [m
+ .feedback-btn:hover {[m
+[31m-  background: rgba(255, 255, 255, 0.1);[m
+[32m+[m[32m  background: rgba(81, 29, 83, 0.08);[m
+   transform: scale(1.1);[m
+ }[m
+ [m
+ .status {[m
+   font-size: 12px;[m
+   opacity: 0.9;[m
+[32m+[m[32m  color: #511d53;[m
+ }[m
+ [m
+ .close-btn {[m
+   background: transparent;[m
+   border: none;[m
+[31m-  color: white;[m
+[32m+[m[32m  color: #511d53;[m
+   font-size: 24px;[m
+   cursor: pointer;[m
+   width: 32px;[m
+[36m@@ -208,7 +209,7 @@[m [mbody {[m
+ }[m
+ [m
+ .close-btn:hover {[m
+[31m-  background: rgba(255, 255, 255, 0.1);[m
+[32m+[m[32m  background: rgba(81, 29, 83, 0.08);[m
+ }[m
+ [m
+ /* Messages Area */[m
+[36m@@ -216,7 +217,7 @@[m [mbody {[m
+   flex: 1;[m
+   padding: 20px;[m
+   overflow-y: auto;[m
+[31m-  background: #f9fafb;[m
+[32m+[m[32m  background: #f7f7f7;[m
+ }[m
+ [m
+ .chat-messages::-webkit-scrollbar {[m
+[36m@@ -379,6 +380,7 @@[m [mbody {[m
+   display: flex;[m
+   gap: 8px;[m
+   align-items: center;[m
+[32m+[m[32m  background: #ffffff;[m
+ }[m
+ [m
+ #user-input {[m
