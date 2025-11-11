@@ -6,7 +6,7 @@ sk-proj-ncUvW2q0_NFn1FKfQRIUCJ8wxKv0CRYo5_ENCQiHeggo_1Fumqr6FspOFh-O3FEe2jS9AhAr
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Calibri", "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
   background: #f7f7f7;
 }
 
@@ -290,11 +290,12 @@ body {
 }
 
 .bubble {
-  background: #e5e7eb;
+  background: #f5eaf4;
   padding: 10px 14px;
   border-radius: 12px;
   max-width: 70%;
   line-height: 1.5;
+  color: #511d53;
 }
 
 .bubble p,
@@ -318,8 +319,8 @@ body {
 }
 
 .user-message .bubble {
-  background: #2563eb;
-  color: white;
+  background: #d6a3ff;
+  color: #511d53;
 }
 
 .user-message .avatar::before {
@@ -402,7 +403,7 @@ body {
 #send-btn {
   width: 40px;
   height: 40px;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  background: #50174a;
   color: white;
   border: none;
   border-radius: 50%;
@@ -411,11 +412,11 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 8px rgba(80, 23, 74, 0.3);
 }
 
 #send-btn:hover {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+  background: #3f123b;
   transform: scale(1.05);
   box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
 }
@@ -440,8 +441,8 @@ body {
 }
 
 .suggested-question {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
+  background: #d6a3ff;
+  border: 1px solid rgba(80, 23, 74, 0.3);
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 13px;
@@ -454,11 +455,11 @@ body {
 }
 
 .suggested-question:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  color: white;
-  border-color: #2563eb;
+  background: #c489f5;
+  color: #2d0f2b;
+  border-color: #50174a;
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 4px 12px rgba(80, 23, 74, 0.25);
 }
 
 /* Quick Reply Buttons */
@@ -470,12 +471,12 @@ body {
 }
 
 .quick-reply-btn {
-  background: white;
-  border: 2px solid #2563eb;
+  background: #d6a3ff;
+  border: 2px solid rgba(80, 23, 74, 0.3);
   border-radius: 20px;
   padding: 12px 18px;
   font-size: 14px;
-  color: #2563eb;
+  color: #511d53;
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: left;
@@ -554,11 +555,11 @@ body {
 }
 
 .quick-reply-btn:hover {
-  background: #2563eb;
-  color: white;
+  background: #c489f5;
+  color: #2d0f2b;
   transform: translateY(-2px);
-  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.4);
-  border-color: #1d4ed8;
+  box-shadow: 0 6px 12px rgba(80, 23, 74, 0.35);
+  border-color: #50174a;
 }
 
 .quick-reply-btn:hover::before {
@@ -568,7 +569,7 @@ body {
 
 .quick-reply-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+  box-shadow: 0 2px 4px rgba(80, 23, 74, 0.3);
 }
 
 /* Calendly Integration Styles */
