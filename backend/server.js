@@ -16,6 +16,39 @@ const { MetricsTracker } = require('./utils/metricsTracker');
 const calendlyConfig = require('./config/calendly');
 const websiteConfig = require('./config/website');
 const { WebsiteContentUpdater } = require('./scripts/update-website-content');
+const { getStaticFAQAnswer } = require('./utils/staticFaq');
+
+const MAX_FDD_SEARCH_RESULTS = 25;
+const MAX_FDD_CONTEXT_CHUNKS = 12;
+const MIN_FDD_SIMILARITY = 0.01;
+
+function isDirectQuestion(message = '') {
+  if (!message) return false;
+  const trimmed = message.trim();
+  if (trimmed.endsWith('?')) {
+    return true;
+  }
+  const lower = trimmed.toLowerCase();
+  const questionStarters = [
+    'who',
+    'what',
+    'where',
+    'when',
+    'why',
+    'how',
+    'can',
+    'could',
+    'do',
+    'does',
+    'did',
+    'is',
+    'are',
+    'should',
+    'would',
+    'will'
+  ];
+  return questionStarters.some(word => lower.startsWith(word + ' '));
+}
 
 function isSpecificQuestion(message = '') {
   if (!message) return false;
@@ -176,13 +209,34 @@ app.post('/api/chat', async (req, res) => {
       totalScore = qualification.totalScore;
     }
 
-    // Serve high-level responses for the first few questions unless the user asks for specifics
     const messageCount = sessionData.messageCount || 1;
     const conversationHistory = sessionData.conversationHistory || [];
     const sessionConversationContext = sessionData.conversationContext || {};
     const qualificationStatusPreview = leadQualifier.getQualificationStatus(totalScore);
 
-    if (messageCount <= 3 && !isSpecificQuestion(sanitizedMessage)) {
+    // Attempt to resolve directly from static FAQ before other logic
+    const staticFaqAnswer = getStaticFAQAnswer(sanitizedMessage);
+
+    if (staticFaqAnswer) {
+      const qualificationStatus = qualificationStatusPreview;
+
+      return res.json({
+        response: staticFaqAnswer,
+        suggestCalendly: false,
+        qualificationScore: totalScore,
+        qualificationStatus,
+        pointsAdded: qualification.points,
+        isQualified: qualification.isQualified,
+        quickReplies: null,
+        suggestFilters: false,
+        filters: updatedFilters
+      });
+    }
+
+    // Serve high-level responses for the first few questions unless the user asks for specifics
+    const directQuestion = isDirectQuestion(sanitizedMessage);
+
+    if (messageCount <= 3 && !isSpecificQuestion(sanitizedMessage) && !directQuestion) {
       const generalResponse = buildGeneralResponse({
         messageCount,
         conversationContext: sessionConversationContext,
@@ -203,27 +257,24 @@ app.post('/api/chat', async (req, res) => {
       )
     ]);
 
-    // Search for relevant documents (reduced to 5 for faster processing)
-    const relevantDocs = await vectorDB.search(queryEmbedding, 5);
+    // Search for relevant documents across the entire FDD knowledge base
+    const relevantDocs = await vectorDB.search(queryEmbedding, MAX_FDD_SEARCH_RESULTS);
 
-    // Prepare context from relevant documents - simplified for speed
-    const filteredDocs = relevantDocs.filter(doc => doc.similarity > 0.05);
+    // Prepare context from relevant documents - include as much FDD coverage as possible
+    const filteredDocs = relevantDocs.filter(doc => doc.similarity >= MIN_FDD_SIMILARITY);
+    const docsForContext = (filteredDocs.length > 0 ? filteredDocs : relevantDocs).slice(0, MAX_FDD_CONTEXT_CHUNKS);
     
-    let context;
-    if (filteredDocs.length > 0) {
-      // Limit to top 2 most relevant for maximum speed
-      context = filteredDocs
-        .slice(0, 2)
-        .map(doc => doc.text)
-        .join('\n\n');
-    } else if (relevantDocs.length > 0) {
-      // If no relevant chunks found, use top 2 most similar
-      context = relevantDocs
-        .slice(0, 2)
-        .map(doc => doc.text)
-        .join('\n\n');
-    } else {
-      context = '';
+    let context = '';
+    if (docsForContext.length > 0) {
+      context = docsForContext
+        .map(doc => {
+          const metadata = doc.metadata || {};
+          const source = metadata.fileName || metadata.title || metadata.source || 'FDD Document';
+          const section = metadata.section ? `Section: ${metadata.section}\n` : '';
+          const page = metadata.pageNumber ? `Page: ${metadata.pageNumber}\n` : '';
+          return `Source: ${source}\n${section}${page}${doc.text}`;
+        })
+        .join('\n\n---\n\n');
     }
 
     // Sanitize context before passing to LLM
